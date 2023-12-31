@@ -4,6 +4,7 @@ from utils import field_utils
 import numpy as np
 class AttractionField(Field):
     """
+    吸引场
     range : 0 ~ 1
     """
     def __init__(self, attractive_points):

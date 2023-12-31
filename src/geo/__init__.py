@@ -1,6 +1,9 @@
 
 class Geometry:
-    all_geometries = set()
+    """
+    几何对象的基类， 包括道路、建筑等可以画图的
+    """
+    __all_geometries = set()
 
     def __init__(self):
         pass
@@ -10,11 +13,11 @@ class Geometry:
 
     @staticmethod
     def register(obj):
-        Geometry.all_geometries.add(obj)
+        Geometry.__all_geometries.add(obj)
 
     @staticmethod
     def plot_all(*args, **kwargs):
-        for geo in Geometry.all_geometries:
+        for geo in Geometry.__all_geometries:
             geo.plot(*args, **kwargs)
 
 

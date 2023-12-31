@@ -8,7 +8,7 @@ import numpy as np
 
 class MomentumField(Field):
     """
-
+    动量场
     """
 
     def __init__(self):
@@ -19,9 +19,9 @@ class MomentumField(Field):
     def sample(self, points):
         super(MomentumField, self).sample(points)
 
-        # TODO 优化
+        # TODO 性能优化
         optimizing_road = None
-        roads = Road.all_roads
+        roads = Road.get_all_roads()
         for road in roads:
             if road.state == RoadState.OPTIMIZING:
                 optimizing_road = road
@@ -35,7 +35,7 @@ class MomentumField(Field):
         assert optimizing_road.points is not None and optimizing_road.points.shape[0] > 0
         last_point = optimizing_road.points[-1]
         vec = points - last_point
-        n_vec = point_utils.normalize_points(vec)
+        n_vec = point_utils.normalize_vectors(vec)
         a = np.dot(n_vec, last_vector)
         a = field_utils.normalize_field(a)
         b = common_utils.gaussian(a, 1.0, 0.1)

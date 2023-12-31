@@ -8,7 +8,7 @@ from utils import RoadState, polyline_utils, field_utils, point_utils
 
 class DirectionField(Field):
     """
-
+    垂直梯度的方向场
     """
 
     def __init__(self):
@@ -16,24 +16,25 @@ class DirectionField(Field):
         self.overlay_mode = FieldOverlayMode.ADD
         self.name = "DirectionField"
 
-
     def sample(self, points):
         super(DirectionField, self).sample(points)
-        buildings = Building.all_buildings
-        roads = Road.all_roads
+
+        # TODO 大量性能优化， 计算正确性校验
+        buildings = Building.get_all_buildings()
+        roads = Road.get_all_roads()
         all_points = []
         optimizing_road = None
         for road in roads:
             if road.state == RoadState.OPTIMIZING:
                 optimizing_road = road
                 continue
-            new_points = polyline_utils.split_by_distance(road.points, 5)
+            new_points = polyline_utils.interpolate_by_distance(road.points, 5)
             all_points.append(new_points)
         assert optimizing_road is not None, "Failed to find any road in optimizing state. Please check if you assign " \
                                             "road state correctly when creating roads "
         for building in buildings:
-            bound_pts = np.concatenate((building.shell, [building.shell[0]]), axis=0)
-            new_points = polyline_utils.split_by_distance(bound_pts, 5)
+            bound_pts = polyline_utils.get_closed_polyline(building.shell)
+            new_points = polyline_utils.interpolate_by_distance(bound_pts, 5)
             all_points.append(new_points)
         point_cloud = np.vstack(all_points)
         print(f"DirectionField point_cloud.shape = {point_cloud.shape}")
@@ -49,8 +50,8 @@ class DirectionField(Field):
         x_delta = x_offset_distance_field - distance_field
         y_delta = y_offset_distance_field - distance_field
 
-        grad = point_utils.normalize_points(np.stack((x_delta, y_delta), axis=1))
-        v_grad = point_utils.v_rotate_points(grad)
+        grad = point_utils.normalize_vectors(np.stack((x_delta, y_delta), axis=1))
+        v_grad = point_utils.v_rotate_vectors(grad)
         last_vec = optimizing_road.get_last_vector()
         rewards = np.abs(np.dot(v_grad, last_vec))
         rewards = 2 * field_utils.normalize_field(rewards) - 1

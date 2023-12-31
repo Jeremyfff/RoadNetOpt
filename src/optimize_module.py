@@ -3,8 +3,9 @@ from geo.road import Road
 from utils import point_utils, FieldOverlayMode
 
 
-class RoadOptimizer():
+class RoadOptimizer:
     def __init__(self, road, fields):
+        self.name = "RoadOptimizer"
         self._target_road: Road = road
         self._fields = fields
         self._search_space = None
@@ -47,5 +48,5 @@ class RoadOptimizer():
         for field in self._fields:
             field.update()
 
-    def plot(self):
-        point_utils.plot_points(self._search_space, self._rewards)
+    def plot(self, show_values=False):
+        point_utils.plot_points(points=self._search_space, values=self._rewards, show_values=show_values)

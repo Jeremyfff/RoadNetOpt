@@ -28,13 +28,14 @@ def point_grid(xmin: float, ymin: float, xmax: float, ymax: float, gap: float):
     return points
 
 
-def plot_points(points: np.ndarray, values=None, sizes=None):
+def plot_points(points: np.ndarray, values=None, sizes=None, show_values=False):
     x = points[:, 0]
     y = points[:, 1]
     plt.scatter(x, y, s=sizes, c=values, cmap='viridis')
     # plot values
-    for i in range(len(values)):
-        plt.text(x[i], y[i], f'{values[i]:.2f}', fontsize=6, ha='center', va='bottom')
+    if show_values:
+        for i in range(len(values)):
+            plt.text(x[i], y[i], f'{values[i]:.2f}', fontsize=6, ha='center', va='bottom')
 
 
 def points_in_radius(points: np.ndarray, target_point: np.ndarray, threshold: float) -> np.ndarray:
@@ -46,31 +47,25 @@ def points_in_radius(points: np.ndarray, target_point: np.ndarray, threshold: fl
 def offset_points(points, offset):
     return points + offset
 
-def normalize_point(point):
-    length = math.sqrt(point[0]**2 + point[1]**2)
+
+def normalize_vector(vec):
+    length = math.sqrt(vec[0] ** 2 + vec[1] ** 2)
     if length == 0:
-        return np.array([0, 0])  # 或者返回其他特定的值，根据实际需求
+        return np.array([0, 0])
     else:
-        new_point = point / length
-        return new_point
+        new_vec = vec / length
+        return new_vec
 
 
-def normalize_points(points):
-    # 计算每个点的长度
-    lengths = np.linalg.norm(points, axis=1)
-
-    # 获取长度为0的点的索引
+def normalize_vectors(vec):
+    lengths = np.linalg.norm(vec, axis=1)
     zero_length_indices = np.where(lengths == 0)
+    new_vec = vec / lengths[:, np.newaxis]
+    new_vec[zero_length_indices] = [0, 0]
+    return new_vec
 
-    # 对长度不为0的点进行归一化处理
-    new_points = points / lengths[:, np.newaxis]
 
-    # 将长度为0的点设置为[0, 0]或者其他特定值
-    new_points[zero_length_indices] = [0, 0]  # 或者根据实际需求设置其他值
-
-    return new_points
-
-def v_rotate_points(points):
+def v_rotate_vectors(vec):
     rotation_matrix = np.array([[0, -1], [1, 0]])
-    rotated_points = np.dot(points, rotation_matrix)
-    return rotated_points
+    rotated_vec = np.dot(vec, rotation_matrix)
+    return rotated_vec
