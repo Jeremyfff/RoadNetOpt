@@ -1,19 +1,18 @@
 import numpy as np
 from shapely.geometry import Polygon
 import shapely.plotting
-from geo import Geometry
+from geo import Object
 from utils.point_utils import xywh2points
 from utils import BuildingType
 import style_module
 
 
-class Building(Geometry):
+class Building(Object):
     __all_buildings = set()
 
     def __init__(self, shell: np.ndarray = None,
                  building_type=BuildingType.NONDEMOLISHABLE):
         super().__init__()
-        Geometry.register(self)
         Building.register(self)
 
         self.shell = shell
@@ -37,6 +36,10 @@ class Building(Geometry):
     @staticmethod
     def get_all_buildings():
         return Building.__all_buildings
+
+    @staticmethod
+    def delete_all_buildings():
+        Building.__all_buildings = set()
 
     @staticmethod
     def quick_buildings():

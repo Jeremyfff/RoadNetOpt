@@ -1,9 +1,20 @@
+class ParentMeta(type):
+    def __init__(cls, name, bases, attrs):
+        super().__init__(name, bases, attrs)
+        if not hasattr(cls, 'registry'):
+            cls.registry = []
+        else:
+            cls.registry.append(cls)
 
-class Geometry:
+    def plot_all(cls):
+        for c in cls.registry:
+            c.plot_all()
+
+
+class Object(metaclass=ParentMeta):
     """
     几何对象的基类， 包括道路、建筑等可以画图的
     """
-    __all_geometries = set()
 
     def __init__(self):
         pass
@@ -11,14 +22,6 @@ class Geometry:
     def plot(self, *args, **kwargs):
         pass
 
-    @staticmethod
-    def register(obj):
-        Geometry.__all_geometries.add(obj)
-
-    @staticmethod
-    def plot_all(*args, **kwargs):
-        for geo in Geometry.__all_geometries:
-            geo.plot(*args, **kwargs)
 
 
 from geo.building import Building

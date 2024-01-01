@@ -1,26 +1,31 @@
 import os.path
-
+import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
-from geo import Road, Building, Geometry
+from geo import Road, Building, Object
 from utils import point_utils, image_utils, road_utils, RoadState, RoadLevel, BuildingType
 
 from optimize_module import RoadOptimizer
 from fields import BuildingField, AttractionField, DirectionField, MomentumField, RandomField
 
 
-def plot_obj(obj, output_folder, epoch, show_values=False):
-    Geometry.plot_all()
-    obj.plot()
+def plot_obj(obj=None, output_folder=None, epoch=None, show_values=False):
+    Object.plot_all()
 
+    try:
+        obj.plot()
+    except Exception as e:
+        pass
     plt.axis('equal')
     plt.axis('off')
     plt.grid(False)
     plt.tight_layout()
-
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-    plt.savefig(os.path.join(output_folder, f"{epoch}_{obj.name}.jpg"))
+    if output_folder is not None:
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+        plt.savefig(os.path.join(output_folder, f"{epoch}_{obj.name}.jpg"))
+    else:
+        plt.show()
     plt.clf()
 
 
@@ -63,7 +68,7 @@ def main():
         # plotting
         plot_obj(optimizer, output_folder, epoch, show_values=False)
         for field in all_fields:
-           plot_obj(field, output_folder, epoch)
+            plot_obj(field, output_folder, epoch)
 
     # end of optimization
     new_road.state = RoadState.OPTIMIZED
@@ -71,3 +76,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

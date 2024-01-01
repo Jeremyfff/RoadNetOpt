@@ -1,9 +1,9 @@
-from geo import Geometry
+from geo import Object
 import numpy as np
 from utils import BuildingType
 
 
-class ExampleGeo(Geometry):
+class ExampleGeo(Object):
     """
     This is an example of a minimized geometric class
     """
@@ -11,7 +11,7 @@ class ExampleGeo(Geometry):
 
     def __init__(self):
         super().__init__()
-        Geometry.register(self)
+        Object.register(self)
         ExampleGeo.register(self)
         # do your stuff
 
@@ -27,3 +27,6 @@ class ExampleGeo(Geometry):
     def plot_all(*args, **kwargs):
         for geo in ExampleGeo.__all_example_geo:
             geo.plot(*args, **kwargs)
+
+
+
