@@ -24,6 +24,12 @@ class Building(Object):
         _style = style_module.get_building_style(self)
         shapely.plotting.plot_polygon(self.polygon, **_style)
 
+    def collide_with(self, buildings):
+        for building in buildings:
+            if self.polygon.intersects(building.polygon):
+                return True
+        return False
+
     @staticmethod
     def register(obj):
         Building.__all_buildings.add(obj)
@@ -43,5 +49,20 @@ class Building(Object):
 
     @staticmethod
     def quick_buildings():
+
         building1 = Building(xywh2points(44, 63, 42, 35), building_type=BuildingType.DEMOLISHABLE)
         return [building1]
+
+
+if __name__ == "__main__":
+    from geo import Road
+    import matplotlib.pyplot as plt
+    roads = Road.quick_roads()
+    buildings = Building.quick_buildings()
+    Object.plot_all()
+
+    plt.axis('equal')
+    plt.axis('off')
+    plt.grid(False)
+    plt.tight_layout()
+    plt.show()
