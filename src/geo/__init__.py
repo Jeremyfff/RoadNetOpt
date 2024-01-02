@@ -27,3 +27,4 @@ class Object(metaclass=ParentMeta):
 from geo.building import Building
 from geo.road import Road
 from geo.terrain import Terrain
+from geo.region import Region

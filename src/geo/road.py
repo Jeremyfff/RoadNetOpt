@@ -1,46 +1,56 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+
+import pandas as pd
 import shapely.plotting
 from shapely.geometry import Polygon, LineString, Point
 import networkx as nx
 from geo import Object
-from utils import RoadLevel, RoadState, BuildingType, point_utils, polyline_utils, road_utils
+from utils import RoadLevel, RoadState, point_utils, polyline_utils, road_utils
 import style_module
 import osmnx as ox
+import geopandas as gpd
+from collections import defaultdict
 
 
 class Road(Object):
+    # 指定列名创建空的 DataFrame
+    # __df = gpd.GeoDataFrame(columns=['geometry', 'level', 'state', 'obj'])
     __all_roads = set()
+    __road_cluster = {'level': defaultdict(set), 'state': defaultdict(set)}
+    __raw_road_geo_by_level = defaultdict(dict)  # 保存按level分类的，state为raw的road的linestring
 
     def __init__(self, points: np.ndarray = None, level=RoadLevel.MAIN, state=RoadState.RAW):
         super().__init__()
-        Road.register(self)
-        # graph related
-
         # geometry related
         self.points = points
+        self.line_string = LineString(self.points)
 
+        # attr related
         self.level = level
         self.state = state
 
         self._search_space = None
         self._rewards = None
 
-    def plot(self, *args, **kwargs):
+        Road.register(self)
+
+    def plot(self, by='level', *args, **kwargs):
         if self.points.shape[0] < 2:
             return
         super(Road, self).plot(*args, **kwargs)
-
-        _style = style_module.get_road_style(self)
-        line = LineString(self.points)
-        shapely.plotting.plot_line(line, **_style)
+        _style = style_module.get_road_plot_style(self, by=by)
+        shapely.plotting.plot_line(self.line_string, **_style)
 
     def add_point(self, point):
         self.points = np.append(self.points, [point], axis=0)
+        self.line_string = LineString(self.points)
 
     def pop_point(self):
-        return self.points.pop()
+        point = self.points.pop()
+        self.line_string = LineString(self.points)
+        return point
 
     def get_last_point(self):
         return self.points[-1]
@@ -56,20 +66,55 @@ class Road(Object):
 
     @staticmethod
     def register(obj):
+        """注册对象"""
         Road.__all_roads.add(obj)
+        Road.__road_cluster['level'][obj.level].add(obj)
+        Road.__road_cluster['state'][obj.state].add(obj)
+        Road.__raw_road_geo_by_level[obj.level][obj] = obj.line_string
 
     @staticmethod
-    def plot_all(*args, **kwargs):
-        for road in Road.__all_roads:
-            road.plot(*args, **kwargs)
+    def re_register_all():
+        """重新注册所有"""
+        roads = Road.get_all_roads()
+        Road.delete_all_roads()
+        for road in roads:
+            Road.register(road)
+
+    @staticmethod
+    def delete_all_roads():
+        """清空所有内容"""
+        __all_roads = set()
+        __road_cluster = {'level': defaultdict(set), 'state': defaultdict(set)}
+        __raw_road_geo_by_level = defaultdict(set)
+
+    @staticmethod
+    def plot_all(by='level', *args, **kwargs):
+        """使用geo pandas进行加速绘制"""
+        for level in Road.__raw_road_geo_by_level.keys():
+            # print(level)
+            road_geo_pair = Road.__raw_road_geo_by_level[level]
+            if len(road_geo_pair) == 0:
+                continue
+            road_iterator = iter(road_geo_pair.keys())
+            _style = style_module.get_road_plot_style(next(road_iterator), by=by)
+            gpd.GeoSeries(road_geo_pair.values()).plot(*args, **kwargs, **_style)
+        for state in Road.__road_cluster['state'].keys():
+            if state == RoadState.RAW:
+                continue
+            for road in Road.__road_cluster['state'][state]:
+                road.plot(by=by, *args, **kwargs)
 
     @staticmethod
     def get_all_roads():
         return Road.__all_roads
 
     @staticmethod
-    def delete_all_roads():
-        Road.__all_roads = set()
+    def get_roads_by_level(level):
+        return Road.__road_cluster['level'][level]
+
+    @staticmethod
+    def get_roads_by_state(state):
+        return Road.__road_cluster['state'][state]
 
     @staticmethod
     def quick_roads():
@@ -102,7 +147,10 @@ class Road(Object):
         G = nx.Graph()
 
         for i, point in enumerate(point_list):
-            G.add_node(i, x=point[0], y=point[1], geometry=Point(point[0], point[1]))
+            G.add_node(i,
+                       x=point[0],
+                       y=point[1],
+                       geometry=Point(point[0], point[1]))
 
         for i, road in enumerate(list(roads)):
             line = LineString(road.points)
@@ -140,15 +188,37 @@ class Road(Object):
             roads.add(road)
         return roads
 
+    @staticmethod
+    def data_to_roads(data: dict):
+        assert 'roads' in data, 'invalid data'
+        roads = []
+        roads_data = data['roads']
+        for road_data in roads_data:
+            road = Road(points=np.array(road_data['points']),
+                        level=road_data['level'],
+                        state=road_data['state'])
+            roads.append(road)
+        return roads
+
+    @staticmethod
+    def roads_to_data(out_data: dict):
+        if 'roads' not in out_data:
+            out_data['roads'] = []
+        for road in Road.get_all_roads():
+            road_data = {
+                'points': road.points.tolist(),
+                'level': road.level,
+                'state': road.state
+            }
+            out_data['roads'].append(road_data)
+
 
 def example_roads_to_graph():
     existed_roads = Road.quick_roads()
     G = Road.roads_to_graph(existed_roads)
-    # 提取节点的坐标信息
-    pos = {node: (data['x'], data['y']) for node, data in G.nodes(data=True)}
-    # 创建一个空字典，用于存储每条边的粗细
-    edge_width = {}
 
+    pos = {node: (data['x'], data['y']) for node, data in G.nodes(data=True)}
+    edge_width = {}
     # 遍历图中的每条边，根据 RoadLevel 属性来设置边的粗细
     for u, v, data in G.edges(data=True):
         road_level = data['level']
