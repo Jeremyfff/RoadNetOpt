@@ -30,7 +30,7 @@ def point_grid(xmin: float, ymin: float, xmax: float, ymax: float, gap: float):
 
 def points_to_geo(points: np.ndarray):
     assert len(points.shape) == 2
-    if len(points.shape[0]) < 2:
+    if points.shape[0] < 2:
         geometry = Point(points)
     else:
         geometry = LineString(points)

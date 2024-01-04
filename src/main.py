@@ -2,7 +2,7 @@ import os.path
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
-
+from PIL import Image
 from geo import Road, Building, Region, Object
 from utils import point_utils, image_utils, road_utils, io_utils
 from utils import RoadState, RoadLevel
@@ -12,10 +12,26 @@ from fields import BuildingField, AttractionField, DirectionField, MomentumField
 
 
 def init_plt():
-    plt.axis('equal')
-    plt.axis('off')
-    plt.grid(False)
-    plt.tight_layout()
+    fig, ax = plt.subplots()
+    ax.set_frame_on(False)  # 没有边框
+    ax.set_xticks([])  # 没有 x 轴坐标
+    ax.set_yticks([])  # 没有 y 轴坐标
+    ax.set_aspect('equal')  # 横纵轴比例相同
+    fig.tight_layout()
+    return fig, ax
+
+
+def init_canvas():
+    from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+    from matplotlib.figure import Figure
+    fig, ax = plt.subplots()
+    ax.set_frame_on(False)  # 没有边框
+    ax.set_xticks([])  # 没有 x 轴坐标
+    ax.set_yticks([])  # 没有 y 轴坐标
+    ax.set_aspect('equal')  # 横纵轴比例相同
+    fig.tight_layout()
+    canvas = FigureCanvas(fig)
+    return canvas, ax
 
 
 def plot_obj(obj=None, output_folder=None, epoch=None, show_values=False):
@@ -84,37 +100,46 @@ def example_load_data():
     from descartes import PolygonPatch
     import geopandas as gpd
 
-    # 创建一个新的 Figure 和 Axes 对象
-    fig, ax = plt.subplots()
-
-    # 设置 ax 的属性
-    ax.set_frame_on(False)  # 没有边框
-    ax.set_xticks([])  # 没有 x 轴坐标
-    ax.set_yticks([])  # 没有 y 轴坐标
-    ax.set_aspect('equal')  # 横纵轴比例相同
-    fig.tight_layout()
-
-
     data = io_utils.load_data("../data/和县/data.bin")
     Road.data_to_roads(data)
-    Building.data_to_buildings(data)
-    Region.data_to_regions(data)
-    print(len(Road.get_all_roads()))
-    print(len(Building.get_all_buildings()))
+    Road.show_info()
+    # Building.data_to_buildings(data)
+    # Region.data_to_regions(data)
 
+    canvas, ax = init_canvas()
     Road.plot_all(ax=ax)
-    Building.plot_all(ax=ax, by='movable')
-    # polygons = []
-    # for building in Building.get_all_buildings():
-    #     polygons.append(building.polygon)
-    #
-    # gpd.GeoSeries(polygons).plot()
+    road = Road.get_last_road()
+    Road.split_road(road, 0.5, True)
+    Road.show_info()
+    canvas.draw()
+    # 从画布中提取图像数据为 NumPy 数组
+    image_data = np.frombuffer(canvas.tostring_rgb(), dtype=np.uint8)
+    image_data = image_data.reshape(canvas.get_width_height()[::-1] + (3,))
+    # 创建 PIL 的图像对象
+    pil_image = Image.fromarray(image_data)
+    # 显示图像
+    pil_image.show()
 
-    #Building.plot_all()
 
-    plt.show()
+def example_graph():
+    data = io_utils.load_data("../data/和县/data.bin")
+    Road.data_to_roads(data)
+    fig, ax = init_plt()
+    G = Road.to_graph()
+    pos = {node: (data['x'], data['y']) for node, data in G.nodes(data=True)}
+    nx.draw_networkx(G,
+                     ax=ax,
+                     pos=pos,
+                     with_labels=False,
+                     node_size=10)  # 绘制图形
+    plt.show()  # 显示图形
 
+
+def simplify_roads_example():
+    data = io_utils.load_data("../data/和县/data.bin")
+    Road.data_to_roads(data)
+    Road.simplify_roads()
+    Road.show_info()
 
 if __name__ == '__main__':
-    # main()
-    example_load_data()
+    simplify_roads_example()

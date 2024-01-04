@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 from utils import building_utils, road_utils, INFO_VERSION
 from utils import RoadLevel, RoadState, RegionAccessibleType, RegionType, BuildingStyle, BuildingQuality, \
     BuildingMovableType
+from utils.common_utils import timer
 
 
 def get_entity_points_auto(entity):
@@ -24,6 +25,7 @@ def get_entity_points_auto(entity):
         raise Exception('不支持的类型')
 
 
+@timer
 def dxf_to_data(path, cache=True, use_cache=True):
     # 指定要提取的图层名称
     road_layer_mapper = {
@@ -178,6 +180,7 @@ def xml_to_data(path: str) -> dict:
     return data
 
 
+@timer
 def save_data(data, path):
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
@@ -186,6 +189,7 @@ def save_data(data, path):
     print(f'data wrote to {path}')
 
 
+@timer
 def load_data(path):
     with open(path, 'rb') as file:
         data = pickle.load(file)
@@ -193,9 +197,6 @@ def load_data(path):
 
 
 if __name__ == "__main__":
-    from geo import Road
-    import matplotlib.pyplot as plt
-
     dxf_path = "../../data/和县/现状条件.dxf"
     data = dxf_to_data(dxf_path)
     save_data(data, os.path.join(os.path.dirname(dxf_path), 'data.bin'))
