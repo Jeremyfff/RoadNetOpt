@@ -1,4 +1,4 @@
-class ParentMeta(type):
+class ObjectMeta(type):
     def __init__(cls, name, bases, attrs):
         super().__init__(name, bases, attrs)
         if not hasattr(cls, 'registry'):
@@ -11,16 +11,10 @@ class ParentMeta(type):
             c.plot_all()
 
 
-class Object(metaclass=ParentMeta):
-    """
-    几何对象的基类， 包括道路、建筑等可以画图的
-    """
-
+class Object(metaclass=ObjectMeta):
     def __init__(self):
         pass
 
-    def plot(self, *args, **kwargs):
-        pass
 
 
 

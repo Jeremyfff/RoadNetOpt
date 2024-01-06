@@ -2,7 +2,7 @@ import math
 import numpy as np
 import shapely.plotting
 from matplotlib import pyplot as plt
-
+from shapely import Point, LineString
 
 def xywh2points(x, y, w, h):
     pt1 = (x - w / 2, y - h / 2)
@@ -27,6 +27,14 @@ def point_grid(xmin: float, ymin: float, xmax: float, ymax: float, gap: float):
     points = np.hstack((X_reshaped, Y_reshaped))
     return points
 
+
+def points_to_geo(points: np.ndarray):
+    assert len(points.shape) == 2
+    if points.shape[0] < 2:
+        geometry = Point(points)
+    else:
+        geometry = LineString(points)
+    return geometry
 
 def plot_points(points: np.ndarray, values=None, sizes=None, show_values=False):
     x = points[:, 0]
