@@ -132,6 +132,8 @@ def _get_entity_points_auto(entity):
 
 @timer
 def save_data(data, path):
+    if path == '':
+        return
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
     with open(path, 'wb') as file:
@@ -146,11 +148,18 @@ def load_data(path):
     return data
 
 
-def open_file_window():
+def open_file_window(**kwargs):
     root = tk.Tk()
     root.withdraw()
-    file_path = filedialog.askopenfilename()
+    file_path = filedialog.askopenfilename(**kwargs)
     return file_path
+
+def save_file_window(**kwargs):
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.asksaveasfile(**kwargs)
+    print(file_path.name)
+    return file_path.name
 
 if __name__ == "__main__":
     dxf_path = "../../data/和县/现状条件.dxf"

@@ -148,6 +148,9 @@ class Region(Object):
 
     # region 获取查找
     @staticmethod
+    def get_region_attrs():
+        return Region.__region_attrs
+    @staticmethod
     def get_region_by_uid(uid):
         region = Region.__region_gdf.loc[uid]
         return region
@@ -204,6 +207,7 @@ class Region(Object):
         Region.delete_all()
 
         regions_data = data['regions']
+        assert isinstance(regions_data, list)
         points_list = []
         accessible_list = []
         region_type_list = []

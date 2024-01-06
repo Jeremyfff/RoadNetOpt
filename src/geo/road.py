@@ -286,6 +286,13 @@ class Road(Object):
 
     # region 获取查找
     @staticmethod
+    def get_edge_attrs():
+        return Road.__edge_attrs
+    @staticmethod
+    def get_node_attrs():
+        return Road.__node_attrs
+
+    @staticmethod
     def get_road_by_uid(uid: uuid.UUID):
         road = Road.__edge_gdf.loc[uid]
         return road
@@ -555,6 +562,7 @@ class Road(Object):
         assert 'roads' in data, 'invalid data'
         Road.delete_all()
         roads_data = data['roads']
+        assert isinstance(roads_data, list)
         print(f"共有{len(roads_data)}条道路数据")
         points_list = []
         level_list = []

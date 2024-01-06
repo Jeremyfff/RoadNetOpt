@@ -168,6 +168,9 @@ class Building(Object):
 
     # region 获取查找
     @staticmethod
+    def get_building_attrs():
+        return Building.__building_attrs
+    @staticmethod
     def get_building_by_uid(uid):
         building = Building.__building_gdf.loc[uid]
         return building
@@ -226,6 +229,7 @@ class Building(Object):
         Building.delete_all()
 
         buildings_data = data['buildings']
+        assert isinstance(buildings_data, list)
         print(f"共有{len(buildings_data)}条建筑数据")
         points_list = []
         movable_list = []
