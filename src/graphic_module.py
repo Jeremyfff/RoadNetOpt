@@ -114,7 +114,7 @@ class MainGraphTexture(GraphicTexture):
         self.x_lim = None
         self.y_lim = None
 
-    def plot_gdf(self, gdf, x_lim, y_lim, **kwargs):
+    def plot_gdf(self, gdf, **kwargs):
         logging.warning('main graph texture dose not support plot gdf')
 
     def update(self):
