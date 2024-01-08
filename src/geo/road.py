@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -460,12 +462,40 @@ class Road(Object):
     # region 绘图相关
     @staticmethod
     def plot_roads(roads, *args, **kwargs):
+        roads = gpd.GeoDataFrame(roads, geometry='geometry')
         roads.plot(*args, **kwargs)
 
     @staticmethod
     def plot_all(*args, **kwargs):
         """使用geo pandas进行加速绘制"""
         Road.__edge_gdf.plot(*args, **kwargs)
+    __encode_ratio = 1
+    __rgb_to_idx = {}
+    @staticmethod
+    def encode_to_rgb(i):
+        ii = i * Road.__encode_ratio
+        # 最大可编码16,777,216个数
+        b = (ii % 256) / 256
+        g = ((ii // 256) % 256) / 256
+        r = ((ii // 256 // 256) % 256) / 256
+        # print(f'i = {i}, r = {r}, g = {g}, b = {b}')
+        return (r, g, b)
+    @staticmethod
+    def get_encode_ratio():
+        return Road.__encode_ratio
+    @staticmethod
+    def plot_using_idx(*args,**kwargs):
+        colors = []
+        line_width = [5] * len(Road.__edge_gdf)
+        # Road.__encode_ratio = math.floor(16777215.0 / len(Road.__edge_gdf))
+        Road.__encode_ratio = 3
+        for i in range(len(Road.__edge_gdf)):
+            colors.append(Road.encode_to_rgb(i))
+        gdf_with_colors = Road.__edge_gdf.copy()
+        gdf_with_colors['colors'] = colors
+        gdf_with_colors['line_width'] = line_width
+        gdf_with_colors.plot(color=gdf_with_colors['colors'], linewidth=gdf_with_colors['line_width'], *args, **kwargs)
+        # 在每个几何对象上标注序号
 
     # endregion
 
@@ -705,4 +735,10 @@ def example_graph_to_roads():
 
 
 if __name__ == "__main__":
-    example_graph_to_roads()
+    # example_graph_to_roads()
+    for i in range(10000):
+        # 最大可编码16,777,216个数
+        b = (i % 256)
+        g = ((i // 256) % 256)
+        r = ((i // 256 // 256) % 256)
+        print(f'i = {i}, r = {r}, g = {g}, b = {b}')

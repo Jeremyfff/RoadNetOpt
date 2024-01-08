@@ -132,7 +132,7 @@ def _get_entity_points_auto(entity):
 
 @timer
 def save_data(data, path):
-    if path == '':
+    if path == '' or path is None:
         return
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
@@ -158,6 +158,8 @@ def save_file_window(**kwargs):
     root = tk.Tk()
     root.withdraw()
     file_path = filedialog.asksaveasfile(**kwargs)
+    if file_path is None:
+        return None
     print(file_path.name)
     return file_path.name
 
