@@ -1,3 +1,4 @@
+
 import time
 import imgui
 import pandas as pd
@@ -15,6 +16,7 @@ from utils import io_utils
 from utils import RoadLevel, RoadState, BuildingMovableType, BuildingStyle, BuildingQuality, RegionAccessibleType, \
     RegionType
 from pympler.asizeof import asizeof
+from style_module import StyleManager, PlotStyle
 import ctypes
 
 # ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
@@ -30,13 +32,14 @@ BOTTOM_WINDOW_HEIGHT = 32
 mDxfWindowOpened = False
 mInfoWindowOpened = True
 mLoggingWindowOpened = False
+
 mImageWindowSize = (0, 0)
 mImageWindowPos = (0, 0)
 mImageWindowInnerSize = (0, 0)
 mImageWindowInnerPos = (0, 0)
 mImageWindowMousePos = (0, 0)
 
-mSelectedRoads = {}
+mSelectedRoads = {}  # 被选中的道路 dict{uid:road}
 
 mDxfPath = r'D:/M.Arch/2024Spr/RoadNetworkOptimization/RoadNetOpt/data/和县/simplified_data.dxf'
 mLoadDxfNextFrame = False
@@ -49,6 +52,8 @@ mDataSize = 0
 mConstEmptyData = {'version': 'N/A', 'roads': 'N/A', 'buildings': 'N/A', 'regions': 'N/A', 'height': 'N/A'}
 
 mGDFInfo = {}
+mGraphicCacheInfo = {}
+mTextureInfo = {}
 
 mRoadGDFCluster = {'level': {key: True for key in RoadLevel}, 'state': {key: True for key in RoadState}}
 mBuildingGDFCluster = {'movable': {key: True for key in BuildingMovableType},
@@ -56,10 +61,19 @@ mBuildingGDFCluster = {'movable': {key: True for key in BuildingMovableType},
 mRegionGDFCluster = {'accessible': {key: True for key in RegionAccessibleType},
                      'region_type': {key: True for key in RegionType}}
 
+
+mRoadDisplayOptions = ['level', 'state']
+mCurrentRoadDisplayOption = 0
+mBuildingDisplayOptions = ['movable', 'style', 'quality']
+mCurrentBuildingDisplayOption = 0
+mRegionDisplayOptions = ['accessible', 'quality', 'region_type']
+mCurrentRegionDisplayOption = 0
+
+
 mTmpPopupInputValue = ''
 mShowHelpInfo = True
 mFrameTime = 0
-
+mFirstLoop = True
 
 def imgui_main_window():
     global lst_time, mDxfWindowOpened
@@ -108,18 +122,19 @@ def imgui_image_window():
     textures_to_delete = set()
     flags = imgui.TAB_BAR_AUTO_SELECT_NEW_TABS | imgui.TAB_BAR_TAB_LIST_POPUP_BUTTON
     with imgui.begin_tab_bar('image_tab_bar', flags=flags):
-        for texture in graphic_manager.textures.values():
+        for texture in GraphicManager.instance.textures.values():
             if not texture.exposed:
                 continue
             selected, opened = imgui.begin_tab_item(texture.name, imgui.TAB_ITEM_TRAILING)
             if selected:
                 imgui.image(texture.texture_id, texture.width, texture.height)
 
-                info_dict = {'last updated': str(texture.last_update_time),
-                             'texture size': f"{texture.width} , {texture.height}",
-                             'x_lim': str(texture.x_lim),
-                             'y_lim': str(texture.y_lim)}
-                imgui_dict_viewer_component(info_dict, 'texture info', 'key', 'value', None, 800)
+                imgui_main_texture_subwindow()
+                mTextureInfo['last updated'] = str(texture.last_update_time)
+                mTextureInfo['texture size'] = f"{texture.width} , {texture.height}"
+                mTextureInfo['x_lim'] = str(texture.x_lim)
+                mTextureInfo['y_lim'] = str(texture.y_lim)
+                imgui_dict_viewer_component(mTextureInfo, 'texture info', 'key', 'value', None, 800)
                 if texture.cached_data is not None:
                     if imgui.button('save'):
                         image = Image.fromarray(texture.cached_data.astype('uint8'))  # 将图像数据缩放到 0-255 范围并转换为 uint8 类型
@@ -134,7 +149,7 @@ def imgui_image_window():
     imgui.end()
 
     for name in textures_to_delete:
-        graphic_manager.del_texture(name)
+        GraphicManager.instance.del_texture(name)
 
 
 def imgui_bottom_window():
@@ -155,6 +170,28 @@ def imgui_bottom_window():
 
     imgui.end()
 
+def imgui_main_texture_subwindow():
+    global mCurrentRoadDisplayOption,mCurrentBuildingDisplayOption, mCurrentRegionDisplayOption
+    if mFirstLoop:
+        imgui.set_next_window_position(*mImageWindowInnerPos)
+    flags = imgui.WINDOW_NO_TITLE_BAR
+    expanded, _ = imgui.begin('main texture', False, flags)
+    any_changed = False
+    changed, mCurrentRoadDisplayOption = imgui.combo('road display:', mCurrentRoadDisplayOption, mRoadDisplayOptions)
+    any_changed |= changed
+    changed, mCurrentBuildingDisplayOption = imgui.combo('building display:', mCurrentBuildingDisplayOption, mBuildingDisplayOptions)
+    any_changed |= changed
+    changed, mCurrentRegionDisplayOption = imgui.combo('region display:', mCurrentRegionDisplayOption, mRegionDisplayOptions)
+    any_changed |= changed
+    if any_changed:
+        StyleManager.instance.display_style.set_current_road_style_name(mRoadDisplayOptions[mCurrentRoadDisplayOption])
+        StyleManager.instance.display_style.set_current_building_style_name(mBuildingDisplayOptions[mCurrentBuildingDisplayOption])
+        StyleManager.instance.display_style.set_current_region_style_name(mRegionDisplayOptions[mCurrentRegionDisplayOption])
+        GraphicManager.instance.main_texture.clear_cache()
+    if StyleManager.instance.display_style.show_imgui_road_color_picker():
+        GraphicManager.instance.main_texture.clear_cache()
+
+    imgui.end()
 
 def imgui_dxf_subwindow():
     global mDxfWindowOpened, mDxfPath, mDxfDoc, mLoadDxfNextFrame, mDxfLayers
@@ -213,24 +250,21 @@ def imgui_info_subwindow():
     if mInfoWindowOpened:
         expanded, mInfoWindowOpened = imgui.begin('信息窗口', True)
         if mFrameTime == 0:
-            mFrameTime += 1e-5
+            mFrameTime += 1e-4
         imgui.text(f'fps {(1.0 / mFrameTime):.1f}')
         imgui.separator()
         imgui.text('gdf信息:')
         update_mGDFInfo()
         imgui_dict_viewer_component(mGDFInfo, 'dgf info', 'GDF Type', 'count', lambda value: str(value))
-        imgui.text(f'window size {imgui.get_window_size()}')
-        imgui.text(f'window pos {imgui.get_window_position()}')
-        imgui.text(f'mouse pos {imgui.get_mouse_position()}')
-
-        imgui.text(f'img wd size = {mImageWindowSize}')
-        imgui.text(f'img wd pos = {mImageWindowPos}')
-        imgui.text(f'img wd mouse pos = {mImageWindowMousePos}')
 
         imgui.text(f'selected roads {len(mSelectedRoads)}')
-        imgui.text(f'cached highlighted img {graphic_manager.main_texture.cached_highlighted_road_data is not None}')
-        imgui.text(f'cached road img {graphic_manager.main_texture.cached_road_data is not None}')
-        imgui.text(f'cached road idx img {graphic_manager.main_texture.cached_road_idx is not None}')
+
+        imgui.text('')
+        imgui.text('图像缓冲区:')
+        mGraphicCacheInfo['cached highlighted img'] = GraphicManager.instance.main_texture.cached_highlighted_road_data is not None
+        mGraphicCacheInfo['cached road img'] = GraphicManager.instance.main_texture.cached_road_data is not None
+        mGraphicCacheInfo['cached road idx img'] = GraphicManager.instance.main_texture.cached_road_idx is not None
+        imgui_dict_viewer_component(mGraphicCacheInfo, 'graphic cache info', 'cache type', 'has data', lambda value: str(value))
         imgui.end()
 
 
@@ -245,7 +279,19 @@ def imgui_logging_subwindow():
 def imgui_home_page():
     imgui.push_id('home_page')
     imgui.text("welcome to road net opt")
-
+    imgui.text_wrapped("交互式街区路网织补工具")
+    imgui.text("""
+  _____                 _ _   _      _    ____        _   
+ |  __ \               | | \ | |    | |  / __ \      | |  
+ | |__) |___   __ _  __| |  \| | ___| |_| |  | |_ __ | |_ 
+ |  _  // _ \ / _` |/ _` | . ` |/ _ \ __| |  | | '_ \| __|
+ | | \ \ (_) | (_| | (_| | |\  |  __/ |_| |__| | |_) | |_ 
+ |_|  \_\___/ \__,_|\__,_|_| \_|\___|\__|\____/| .__/ \__|
+                                               | |        
+                                               |_|       
+    """)
+    imgui.text('version:0.1')
+    imgui.text('冯以恒， 武文忻， 邱淑冰')
     imgui.pop_id()
 
 
@@ -417,20 +463,20 @@ def imgui_geo_page():
         if expanded:
             imgui.text('plotting')
             if imgui.button('plot all roads'):
-                graphic_manager.plot_to('roads', Road.get_all_roads())
+                GraphicManager.instance.plot_to('roads', Road.get_all_roads())
             imgui.same_line()
             if imgui.button('plot all buildings'):
-                graphic_manager.plot_to('buildings', Building.get_all_buildings())
+                GraphicManager.instance.plot_to('buildings', Building.get_all_buildings())
             imgui.same_line()
             if imgui.button('plot all regions'):
-                graphic_manager.plot_to('regions', Region.get_all_regions())
+                GraphicManager.instance.plot_to('regions', Region.get_all_regions())
 
             if imgui.button('plot all gdf'):
-                graphic_manager.plot_to('all',
+                GraphicManager.instance.plot_to('all',
                                         [Road.get_all_roads(), Building.get_all_buildings(), Region.get_all_regions()])
 
             if imgui.button('plot by idx'):
-                graphic_manager.plot_to2('roads', Road.plot_using_idx)
+                GraphicManager.instance.plot_to2('roads', Road.plot_using_idx, roads=Road.get_all_roads())
         expanded, visible = imgui.collapsing_header('使用cluster绘图', True, imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
             if imgui.button('plot roads by cluster'):
@@ -445,7 +491,7 @@ def imgui_geo_page():
                     gdf = pd.concat(gdfs, ignore_index=False)
                     uid_sets_by_attr.append(set(gdf.index))
                 common_uid = list(set.intersection(*uid_sets_by_attr))
-                graphic_manager.plot_to('roads', Road.get_all_roads().loc[common_uid])
+                GraphicManager.instance.plot_to('roads', Road.get_all_roads().loc[common_uid])
 
             if imgui.button('plot buildings by cluster'):
                 uid_sets_by_attr = []
@@ -459,7 +505,7 @@ def imgui_geo_page():
                     gdf = pd.concat(gdfs, ignore_index=False)
                     uid_sets_by_attr.append(set(gdf.index))
                 common_uid = list(set.intersection(*uid_sets_by_attr))
-                graphic_manager.plot_to('buildings', Building.get_all_buildings().loc[common_uid])
+                GraphicManager.instance.plot_to('buildings', Building.get_all_buildings().loc[common_uid])
 
             if imgui.button('plot regions by cluster'):
                 uid_sets_by_attr = []
@@ -473,18 +519,18 @@ def imgui_geo_page():
                     gdf = pd.concat(gdfs, ignore_index=False)
                     uid_sets_by_attr.append(set(gdf.index))
                 common_uid = list(set.intersection(*uid_sets_by_attr))
-                graphic_manager.plot_to('regions', Region.get_all_regions().loc[common_uid])
+                GraphicManager.instance.plot_to('regions', Region.get_all_regions().loc[common_uid])
 
         expanded, visible = imgui.collapsing_header('其他', True, imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
             if imgui.button('update main'):
                 update_main_graphic()
             if imgui.button('show cached road data'):
-                graphic_manager.bilt_to('cached road data', graphic_manager.main_texture.cached_road_data)
+                GraphicManager.instance.bilt_to('cached road data', GraphicManager.instance.main_texture.cached_road_data)
             if imgui.button('show cached road idx data'):
-                graphic_manager.bilt_to('cached road idx data', graphic_manager.main_texture.cached_road_idx)
+                GraphicManager.instance.bilt_to('cached road idx data', GraphicManager.instance.main_texture.cached_road_idx)
             if imgui.button('show cached highlighted road data'):
-                graphic_manager.bilt_to('cached highlighted road data', graphic_manager.main_texture.cached_highlighted_road_data)
+                GraphicManager.instance.bilt_to('cached highlighted road data', GraphicManager.instance.main_texture.cached_highlighted_road_data)
         imgui.tree_pop()
     imgui.pop_id()
 
@@ -504,10 +550,10 @@ def imgui_settings_page():
     imgui.show_style_selector('style selector')
     if imgui.tree_node('graphic settings'):
         imgui.text('graphic textures')
-        imgui.listbox('', 0, [texture.name for texture in graphic_manager.textures.values()])
+        imgui.listbox('', 0, [texture.name for texture in GraphicManager.instance.textures.values()])
         imgui_popup_modal_input_ok_cancel_component('_add_texture', 'add texture', 'name?',
                                                     'please type in texture name',
-                                                    lambda name: graphic_manager.get_or_create_texture(name))
+                                                    lambda name: GraphicManager.instance.get_or_create_texture(name))
         imgui.tree_pop()
     if imgui.tree_node('style settings'):
         imgui.show_style_editor()
@@ -579,6 +625,14 @@ def imgui_popup_modal_input_ok_cancel_component(id, button_label, title, content
     imgui.pop_id()
 
 
+mSpinImageArray = []
+mSpinStartTime = {}
+mSpinLastIdx = {}
+mSpinTextureId = {}
+mSpinThread = {}
+SPIN_ANI_FRAME = 40  # frame per sec
+SPIN_TIME = 1  # sec
+
 def imgui_spinner(name, width=20, height=20):
     if name not in mSpinStartTime:
         return
@@ -611,15 +665,6 @@ def imgui_end_spinner(name):
     mSpinThread.pop(name)
 
 
-mSpinImageArray = []
-mSpinStartTime = {}
-mSpinLastIdx = {}
-mSpinTextureId = {}
-mSpinThread = {}
-SPIN_ANI_FRAME = 40  # frame per sec
-SPIN_TIME = 1  # sec
-
-
 def imgui_init_spinner():
     global mSpinImageArray
     mSpinImageArray = []
@@ -635,14 +680,14 @@ def update_main_graphic():
     if imgui.is_key_pressed(imgui.KEY_ESCAPE):
         if len(mSelectedRoads) > 0:
             print('[GUI][update_main_graphic] clear highlight data')
-            graphic_manager.main_texture.clear_highlight_data()
+            GraphicManager.instance.main_texture.clear_highlight_data()
             mSelectedRoads = {}
     if imgui.is_key_pressed(imgui.KEY_DELETE):
         print('[GUI][update_main_graphic] redraw all')
-        graphic_manager.main_texture.clear_cache()
+        GraphicManager.instance.main_texture.clear_cache()
 
     if imgui.is_mouse_clicked(imgui.MOUSE_BUTTON_LEFT):
-        on_road, idx = graphic_manager.main_texture.on_left_mouse_click(mImageWindowMousePos)
+        on_road, idx = GraphicManager.instance.main_texture.on_left_mouse_click(mImageWindowMousePos)
         if on_road:
             try:
                 road = Road.get_road_by_index(idx)
@@ -652,8 +697,11 @@ def update_main_graphic():
                 pass
 
 
-    graphic_manager.main_texture.update(window_size=mImageWindowSize,
+    GraphicManager.instance.main_texture.update(window_size=mImageWindowSize,
                                         selected_roads = mSelectedRoads)
+
+
+
 
 
 if __name__ == "__main__":
@@ -690,8 +738,8 @@ if __name__ == "__main__":
     imgui.push_style_var(imgui.STYLE_FRAME_ROUNDING, 4)
 
     imgui_init_spinner()
-
     graphic_manager = GraphicManager()
+    
 
     lst_time = time.time()
     while True:
@@ -718,6 +766,7 @@ if __name__ == "__main__":
 
         mFrameTime = (time.time() - lst_time)
         lst_time = time.time()
+        mFirstLoop = False
 
         # render and display
         gl.glClearColor(0, 0, 0, 1)

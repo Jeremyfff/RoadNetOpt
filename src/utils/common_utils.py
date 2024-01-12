@@ -14,6 +14,20 @@ def get_arg(kwargs: dict, name: str, default: any = None):
 def gaussian(x, mu, sigma):
     return np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) / (sigma * np.sqrt(2 * np.pi))
 
+encode_ratio = 3
+def id_to_rgb(i):
+    ii = i * encode_ratio
+    # 最大可编码16,777,216 / 3个数
+    b = (ii % 256) / 256
+    g = ((ii // 256) % 256) / 256
+    r = ((ii // 256 // 256) % 256) / 256
+    # print(f'i = {i}, r = {r}, g = {g}, b = {b}')
+    return (r, g, b)
+
+def rgb_to_id(color):
+    id = color[0] * 256 * 256 + color[1] * 256 + color[2]
+    id = round(id / encode_ratio)
+    return id
 
 def timer(func):
     def wrapper(*args, **kwargs):

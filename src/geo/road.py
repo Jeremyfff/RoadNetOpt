@@ -19,7 +19,7 @@ import uuid
 import logging
 from typing import Union
 from tqdm import tqdm
-from utils.common_utils import timer, duplicate_filter
+from utils.common_utils import timer, duplicate_filter, rgb_to_id, id_to_rgb
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
@@ -43,6 +43,7 @@ class Road(Object):
     __cached_edge_gdf = None
 
     _flag_cached_graph_need_update = False
+    __uid = uuid.uuid4()
 
     # region 节点相关
     @staticmethod
@@ -63,6 +64,7 @@ class Road(Object):
         else:
             Road.__node_gdf = new_gdf
         Road.__coord_to_node_uid[(x, y)] = uid
+        Road.__uid = uuid.uuid4()
 
     @staticmethod
     def _add_nodes(uid_list, x_list, y_list, geometry_list):
@@ -84,6 +86,7 @@ class Road(Object):
         # update
         for i in range(len(uid_list)):
             Road.__coord_to_node_uid[(x_list[i], y_list[i])] = uid_list[i]
+        Road.__uid = uuid.uuid4()
 
     @staticmethod
     def _get_coord_uid(coord: tuple) -> uuid.UUID:
@@ -118,6 +121,7 @@ class Road(Object):
         y = node['y']
         Road.__node_gdf.drop(uid, inplace=True)
         Road.__coord_to_node_uid.pop((x, y))  # 同时删除coord_to_node_uid中缓存的坐标
+        Road.__uid = uuid.uuid4()
 
     @staticmethod
     def _clear_node(uid):
@@ -203,6 +207,7 @@ class Road(Object):
             Road.__edge_gdf = gpd.pd.concat([Road.__edge_gdf, road], ignore_index=False)
         else:
             Road.__edge_gdf = road
+        Road.__uid = uuid.uuid4()
         return road['uid']
 
     @staticmethod
@@ -212,6 +217,7 @@ class Road(Object):
             Road.__edge_gdf = gpd.pd.concat([Road.__edge_gdf, roads], ignore_index=False)
         else:
             Road.__edge_gdf = roads
+        Road.__uid = uuid.uuid4()
         return list(roads['uid'])
 
     @staticmethod
@@ -259,6 +265,7 @@ class Road(Object):
         v = road['v']
 
         Road.__edge_gdf.drop(uid, inplace=True)
+        Road.__uid = uuid.uuid4()
 
         # handle cache
         if road['cache']:
@@ -283,6 +290,7 @@ class Road(Object):
         Road.__coord_to_node_uid = {}
         if clear_cache:
             Road.clear_cache()
+        Road.__uid = uuid.uuid4()
 
     # endregion
 
@@ -469,33 +477,30 @@ class Road(Object):
     def plot_all(*args, **kwargs):
         """使用geo pandas进行加速绘制"""
         Road.__edge_gdf.plot(*args, **kwargs)
-    __encode_ratio = 1
-    __rgb_to_idx = {}
+
+
     @staticmethod
-    def encode_to_rgb(i):
-        ii = i * Road.__encode_ratio
-        # 最大可编码16,777,216个数
-        b = (ii % 256) / 256
-        g = ((ii // 256) % 256) / 256
-        r = ((ii // 256 // 256) % 256) / 256
-        # print(f'i = {i}, r = {r}, g = {g}, b = {b}')
-        return (r, g, b)
-    @staticmethod
-    def get_encode_ratio():
-        return Road.__encode_ratio
-    @staticmethod
-    def plot_using_idx(*args,**kwargs):
-        colors = []
+    def plot_using_idx(roads, *args,**kwargs):
         line_width = [5] * len(Road.__edge_gdf)
-        # Road.__encode_ratio = math.floor(16777215.0 / len(Road.__edge_gdf))
-        Road.__encode_ratio = 3
-        for i in range(len(Road.__edge_gdf)):
-            colors.append(Road.encode_to_rgb(i))
-        gdf_with_colors = Road.__edge_gdf.copy()
-        gdf_with_colors['colors'] = colors
-        gdf_with_colors['line_width'] = line_width
-        gdf_with_colors.plot(color=gdf_with_colors['colors'], linewidth=gdf_with_colors['line_width'], *args, **kwargs)
-        # 在每个几何对象上标注序号
+        colors = [id_to_rgb(i) for i in range(len(Road.__edge_gdf))]
+
+        roads_copy = roads.copy()
+        roads_copy['colors'] = colors
+        roads_copy['line_width'] = line_width
+        roads_copy.plot(color=roads_copy['colors'],
+                        linewidth=roads_copy['line_width'],
+                        *args, **kwargs)
+
+    @staticmethod
+    def plot_using_style_factory(roads, style_factory, *args,**kwargs):
+
+        colors, line_width = style_factory(roads)
+        roads_copy = roads.copy()
+        roads_copy['colors'] = colors
+        roads_copy['line_width'] = line_width
+        roads_copy.plot(color=roads_copy['colors'],
+                        linewidth=roads_copy['line_width'],
+                        *args, **kwargs)
 
     # endregion
 

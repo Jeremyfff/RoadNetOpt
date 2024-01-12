@@ -10,58 +10,36 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from geopandas import GeoDataFrame
 import imgui
+
+from style_module import StyleManager, PlotStyle
+import utils.common_utils
 from geo import Road
 import cv2
 import geopandas as gpd
 
 
-def plot_as_array(gdf, width, height, y_lim=None, **kwargs):
-    plt.clf()
-    plt.close('all')
-    fig, ax = plt.subplots(figsize=(width / 100, height / 100), dpi=100)
-    ax.set_frame_on(True)  # 没有边框
-    ax.set_xticks([])  # 没有 x 轴坐标
-    ax.set_yticks([])  # 没有 y 轴坐标
-    ax.set_aspect('equal')  # 横纵轴比例相同
-    fig.patch.set_facecolor('none')  # 设置 figure 的背景色为透明
-    ax.patch.set_facecolor('none')  # 设置 axes 的背景色为透明
-    fig.tight_layout()
-    fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
-    canvas = FigureCanvas(fig)
+def _plot_gdf_func(**kwargs):
+    assert 'gdf' in kwargs
+    assert 'ax' in kwargs
+    gdf = kwargs['gdf']
+    kwargs.pop('gdf')
+
     if isinstance(gdf, GeoDataFrame):
-        gdf.plot(ax=ax, **kwargs)
+        gdf.plot(**kwargs)
     elif isinstance(gdf, list):
         for df in gdf:
-            df.plot(ax=ax, **kwargs)
-
-    if y_lim:
-        ax.set_ylim(y_lim)
-
-    x_range = ax.get_xlim()
-    x_min = x_range[0]
-    x_max = x_range[1]
-    y_range = ax.get_ylim()
-    y_min = y_range[0]
-    y_max = y_range[1]
-
-    y_width = y_max - y_min
-    new_x_width = width / height * y_width
-
-    x_center = (x_min + x_max) / 2
-    new_x_range = (x_center - new_x_width / 2, x_center + new_x_width / 2)
-    ax.set_xlim(new_x_range)
-
-    canvas.draw()
-    # 从画布中提取图像数据为 NumPy 数组
-    image_data = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8)
-    image_data = image_data.reshape(canvas.get_width_height()[::-1] + (4,))
-    return image_data, ax
+            df.plot(**kwargs)
 
 
-def plot_as_array2(plot_func, width, height, y_lim=None,x_lim=None,transparent=True, **kwargs):
-    # 禁用抗锯齿效果
-    matplotlib.rcParams['lines.antialiased'] = False
-    matplotlib.rcParams['patch.antialiased'] = False
+def plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, **kwargs):
+    """kwargs 将会被传递给_plot_gdf_func的gdf.plot方法"""
+    return plot_as_array2(_plot_gdf_func, width, height, y_lim, x_lim, transparent, antialiased, gdf=gdf, **kwargs)
+
+
+def plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, **kwargs):
+    # 禁用/启用抗锯齿效果
+    matplotlib.rcParams['lines.antialiased'] = antialiased
+    matplotlib.rcParams['patch.antialiased'] = antialiased
 
     plt.clf()
     plt.close('all')
@@ -79,13 +57,14 @@ def plot_as_array2(plot_func, width, height, y_lim=None,x_lim=None,transparent=T
 
     plot_func(ax=ax, **kwargs)
 
-
+    # 如果指定了y lim， 则使用指定的y lim， 否则将由matplotlib自动计算y lim
     if y_lim:
         ax.set_ylim(y_lim)
     else:
         pass
         # use default y lim
-
+    # 如果指定了x lim，则使用指定的x lim，如果x lim和y lim的比例与图像的宽高比不同，图像将保持在中间，将会造成坐标空间映射的不准确
+    # 将x lim留空以让程序自动根据图像宽高比计算x lim
     if x_lim:
         ax.set_xlim(x_lim)
     else:
@@ -104,20 +83,22 @@ def plot_as_array2(plot_func, width, height, y_lim=None,x_lim=None,transparent=T
         new_x_range = (x_center - new_x_width / 2, x_center + new_x_width / 2)
         ax.set_xlim(new_x_range)
 
-    canvas.draw()
+    canvas.draw()  # 绘制到画布上
+
     # 从画布中提取图像数据为 NumPy 数组
     image_data = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8)
     image_data = image_data.reshape(canvas.get_width_height()[::-1] + (4,))
 
+    # 校准输出尺寸
     output_width = image_data.shape[1]
     output_height = image_data.shape[0]
     if output_width != width or output_height != height:
         print('遇到了输出误差，正在自动校准 ')
         # 裁剪多余部分
         if output_width > width:
-            image_data = image_data[:,0:width,:]
+            image_data = image_data[:, 0:width, :]
         if output_height > height:
-            image_data = image_data[0:height,:,:]
+            image_data = image_data[0:height, :, :]
         # 重新计算大小，此时的imagedata 一定小于等于期望大小
         output_width = image_data.shape[1]
         output_height = image_data.shape[0]
@@ -128,16 +109,23 @@ def plot_as_array2(plot_func, width, height, y_lim=None,x_lim=None,transparent=T
             image_data = new_image
     return image_data, ax
 
-def tmp(*args, **kwargs):
-    # 在每个几何对象上标注序号
-    Road.plot_using_idx(*args, **kwargs)
-    idx = 0
-    ax = kwargs['ax']
-    for uid, row in Road.get_all_roads().iterrows():
-        line = row['geometry']
-        midpoint = line.interpolate(line.length / 2)
-        ax.text(midpoint.x, midpoint.y, str(idx), fontsize=10, ha='center', color='orange')
-        idx += 1
+
+def world_space_to_image_space(world_x, world_y, x_lim, y_lim, image_width, image_height):
+    assert x_lim[1] - x_lim[0] > 0
+    assert y_lim[1] - y_lim[0] > 0
+
+    image_x = int((world_x - x_lim[0]) / (x_lim[1] - x_lim[0]) * image_width)
+    image_y = int((world_y - y_lim[0]) / (y_lim[1] - y_lim[0]) * image_height)
+    return image_x, image_y
+
+
+def image_space_to_world_space(image_x, image_y, x_lim, y_lim, image_width, image_height):
+    assert image_width != 0
+    assert image_height != 0
+    world_x = (image_x / image_width) * (x_lim[1] - x_lim[0]) + x_lim[0]
+    world_y = (image_y / image_height) * (y_lim[1] - y_lim[0]) + y_lim[0]
+    return world_x, world_y
+
 
 def create_texture_from_array(data):
     height, width, channels = data.shape
@@ -200,7 +188,7 @@ class GraphicTexture:
         height = data.shape[0]
         if width != self.width or height != self.height:
             print(f'[bilt_data] input width {width}, self.width {self.width}')
-            print(f'[bilt_data] input height { height}, self.height {self.height}')
+            print(f'[bilt_data] input height {height}, self.height {self.height}')
             print(f'[bilt_data] bilt data过程中self.size 与input data的size不匹配')
             self.update_size(width, height)
             print(f'[bilt_data] self.size updated to {self.width}, {self.height}')
@@ -221,7 +209,7 @@ class GraphicTexture:
         self.y_lim = ax.get_ylim()
         self.bilt_data(image_data)
 
-    def plot(self, func, **kwargs):
+    def plot_by_func(self, func, **kwargs):
         image_data, ax = plot_as_array2(func, self.width, self.height, self.y_lim, self.x_lim, **kwargs)
         self.x_lim = ax.get_xlim()
         self.y_lim = ax.get_ylim()
@@ -242,30 +230,40 @@ class MainGraphTexture(GraphicTexture):
     def plot_gdf(self, gdf, **kwargs):
         logging.warning('main graph texture dose not support plot gdf')
 
+
     def _in_regions(self, pos):
         return 0 <= pos[0] < self.width and 0 <= pos[1] < self.height
 
+    def _wrapped_plot_as_array2(self, plot_func, **kwargs):
+        img_data, ax = plot_as_array2(plot_func=plot_func,
+                                      width=self.width,
+                                      height=self.height,
+                                      y_lim=self.y_lim,
+                                      transparent=True,
+                                      antialiased=False,
+                                      **kwargs
+                                      )
+        return img_data, ax
     def _render_road(self):
         if self.cached_road_data is None:
-            img_data, ax = plot_as_array2(Road.plot_all, self.width, self.height, self.y_lim)
-            print(f'[_render_road] ylim (before) {self.y_lim}')
+            img_data, ax = self._wrapped_plot_as_array2(Road.plot_using_style_factory,
+                                                        roads=Road.get_all_roads(),
+                                                        style_factory=StyleManager.instance.display_style.get_current_road_style_factory())
             self.x_lim = ax.get_xlim()
             self.y_lim = ax.get_ylim()
-            print(f'[_render_road] ylim (after) {self.y_lim}')
-            print(f'[_render_road] data shape {img_data.shape}')
             self.cached_road_data = img_data
             self._any_change = True
         else:
             img_data = self.cached_road_data
         return img_data
 
+
     def _render_road_idx(self):
         if self.cached_road_idx is None:
             print(f'[_render_road_idx] render road idx')
-            idx_img_data, _ = plot_as_array2(Road.plot_using_idx, self.width, self.height, self.y_lim, self.x_lim, False)
-            # idx_img_data2, _ = plot_as_array2(tmp, self.width, self.height, self.y_lim, self.x_lim)
-            # GraphicManager.instance.bilt_to('debug idx with number', idx_img_data2)
-            # GraphicManager.instance.bilt_to('debug idx color', idx_img_data)
+            idx_img_data, _ = self._wrapped_plot_as_array2(Road.plot_using_idx,
+                                                           x_lim=self.x_lim,
+                                                           roads=Road.get_all_roads())
             self.cached_road_idx = idx_img_data
         else:
             idx_img_data = self.cached_road_idx
@@ -283,12 +281,12 @@ class MainGraphTexture(GraphicTexture):
                 else:
                     roads = [road.to_frame().T for road in list(roads_dict.values())]
                     roads = gpd.pd.concat(roads, ignore_index=False)
-                img_data, ax = plot_as_array2(Road.plot_roads, self.width, self.height, self.y_lim, self.x_lim,
-                                              roads=roads, colors=(0, 1, 0, 1))
-                print(f'[_render_highlighted_road] ylim {self.y_lim}')
-                print(f'[_render_highlighted_road] data shape {img_data.shape}')
+                img_data, ax = self._wrapped_plot_as_array2(Road.plot_roads,
+                                                            x_lim=self.x_lim,
+                                                            roads=roads,
+                                                            colors=(0, 1, 0, 1))
+
             else:
-                print(f'[_render_highlighted_road] nothing to render, return np.zeros')
                 img_data = np.zeros((self.height, self.width, 4), dtype=np.uint8)
             self.cached_highlighted_road_data = img_data
             self._any_change = True
@@ -298,10 +296,8 @@ class MainGraphTexture(GraphicTexture):
 
     def _get_road_idx(self, idx_img_data, mouse_pos):
         pointer_color = idx_img_data[mouse_pos[1], mouse_pos[0]]
-        id = pointer_color[0] * 256 * 256 + pointer_color[1] * 256 + pointer_color[2]
-        print(f'real id = {id}')
-        id = round(id / Road.get_encode_ratio())
-        on_road = not np.array_equal(pointer_color, np.array([255,255,255,255]))
+        id = utils.common_utils.rgb_to_id(pointer_color)
+        on_road = not np.array_equal(pointer_color, np.array([255, 255, 255, 255]))
         print(f'id = {id}, color = {pointer_color}')
         return on_road, id
 
@@ -371,15 +367,18 @@ class MainGraphTexture(GraphicTexture):
         self.cached_highlighted_road_data = None
 
 
+
 class GraphicManager:
     instance = None
 
     def __init__(self):
         GraphicManager.instance = self
         self.textures = {}
-
-        width, height = pygame.display.get_window_size()
+        # width, height = pygame.display.get_window_size()
+        width = 1920
+        height = 1080
         self.main_texture = MainGraphTexture('main', width - 400, height - 200)
+
         self.textures['main'] = self.main_texture
 
         self.x_lim = None
@@ -390,6 +389,9 @@ class GraphicManager:
         self.textures[texture.name] = texture
 
     def del_texture(self, name):
+        if name == 'main':
+            logging.warning('main texture cannot be deleted')
+            return
         texture = self.textures[name]
         self.textures.pop(name)
         del texture
@@ -419,3 +421,5 @@ class GraphicManager:
 
     def update_main(self, **kwargs):
         self.main_texture.update(**kwargs)
+
+
