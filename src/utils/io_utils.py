@@ -79,7 +79,7 @@ def dxf_to_data(doc):
     for entity in msp:
         # ROADS
         if entity.dxf.layer in road_layer_mapper.keys():
-            if entity.dxftype() == 'LWPOLYLINE' or entity.dxftype() == 'POLYLINE':
+            if entity.dxftype() == 'LWPOLYLINE' or entity.dxftype() == 'POLYLINE' or entity.dxftype() == 'LINE':
                 points = _get_entity_points_auto(entity)
                 road_data = {
                     'points': points,

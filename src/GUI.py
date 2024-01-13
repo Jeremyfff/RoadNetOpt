@@ -17,7 +17,6 @@ from utils import RoadLevel, RoadState, BuildingMovableType, BuildingStyle, Buil
 from pympler.asizeof import asizeof
 from style_module import StyleManager, PlotStyle
 import ctypes
-
 # ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 
 """
@@ -184,25 +183,11 @@ def imgui_main_texture_subwindow():
     flags = imgui.WINDOW_NO_TITLE_BAR
     expanded, _ = imgui.begin('main texture', False, flags)
     mHoveringMainTextureSubWindow = is_hovering_window()
-    any_changed = False
-    changed, mCurrentRoadDisplayOption = imgui.combo('road display:', mCurrentRoadDisplayOption, mRoadDisplayOptions)
-    any_changed |= changed
-    changed, mCurrentBuildingDisplayOption = imgui.combo('building display:', mCurrentBuildingDisplayOption,
-                                                         mBuildingDisplayOptions)
-    any_changed |= changed
-    changed, mCurrentRegionDisplayOption = imgui.combo('region display:', mCurrentRegionDisplayOption,
-                                                       mRegionDisplayOptions)
-    any_changed |= changed
-    if any_changed:
-        StyleManager.instance.display_style.set_current_road_style_name(mRoadDisplayOptions[mCurrentRoadDisplayOption])
-        StyleManager.instance.display_style.set_current_building_style_name(
-            mBuildingDisplayOptions[mCurrentBuildingDisplayOption])
-        StyleManager.instance.display_style.set_current_region_style_name(
-            mRegionDisplayOptions[mCurrentRegionDisplayOption])
-        GraphicManager.instance.main_texture.clear_cache()
-
-    if StyleManager.instance.display_style.show_imgui_road_level_color_picker():
-        GraphicManager.instance.main_texture.clear_cache()
+    StyleManager.instance.display_style.show_imgui_style_editor(
+        road_style_change_callback=GraphicManager.instance.main_texture.clear_cache,
+        building_style_change_callback=None,
+        region_style_change_callback=None,
+    )
 
     imgui.end()
 
