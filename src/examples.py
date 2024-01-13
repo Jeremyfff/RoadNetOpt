@@ -1,4 +1,6 @@
 import os.path
+import random
+
 import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
@@ -104,6 +106,17 @@ def example_data_to_roads():
     Road.show_info()
 
 
+def example_data_to_all():
+    data = io_utils.load_data("../data/和县/data.bin")
+    Road.data_to_roads(data)
+    Building.data_to_buildings(data)
+    Region.data_to_regions(data)
+
+    Road.get_all_roads()
+    Building.get_all_buildings()
+    Region.get_all_regions()
+
+
 def example_road_to_graph():
     data = io_utils.load_data("../data/和县/data.bin")
     Road.data_to_roads(data)
@@ -165,13 +178,12 @@ def example_plot_to_buffer():
 
     if x_width < y_width:
         x_center = (x_min + x_max) / 2
-        x_range = (x_center - y_width/2, x_center + y_width/2)
+        x_range = (x_center - y_width / 2, x_center + y_width / 2)
     elif x_width > y_width:
-        y_center = (y_min + y_max)/ 2
-        y_range = (y_center - x_width/2, y_center + x_width/2)
+        y_center = (y_min + y_max) / 2
+        y_range = (y_center - x_width / 2, y_center + x_width / 2)
     ax.set_xlim(x_range)
     ax.set_ylim(y_range)
-
 
     canvas.draw()
     # 从画布中提取图像数据为 NumPy 数组
@@ -183,5 +195,46 @@ def example_plot_to_buffer():
     pil_image.show()
 
 
+def example_add_and_modify_road():
+    data = io_utils.load_data("../data/和县/data.bin")
+    Road.data_to_roads(data)
+
+    print('Creating my road')
+    # output: Creating my road
+    my_road_start_point = np.array([[2, 3]])
+    print(f'My road start point is {my_road_start_point}')
+    # output: My road start point is [[2 3]]
+    my_road_uid = Road.add_road_by_coords(coords=my_road_start_point, level=RoadLevel.BRANCH,
+                                          state=RoadState.OPTIMIZING)
+
+    my_road = Road.get_road_by_uid(my_road_uid)
+    print(f'My road created (uid: {my_road_uid}, type: {type(my_road)})')
+    # output: My road created (uid: fc3234e5-3b5a-4e1c-93de-5f590415e511, type: <class 'pandas.core.series.Series'>)
+    print('My road geo: ', my_road['geometry'])
+    # output: My road geo:  POINT (2 3)
+    for i in range(5):
+        new_point = np.random.rand(1, 2) * 10
+        print(f'[{i}] new point = {new_point}')
+        #  output: [0] new point = [[2.65889853 7.19537759]]
+        #  output: [1] new point = [[0.20383911 1.77654136]]
+        #  output: [2] new point = [[9.74504769 7.18593455]]
+        #  output: [3] new point = [[5.7888099  2.07847427]]
+        #  output: [4] new point = [[0.51628918 1.22321586]]
+        my_road = Road.add_point_to_road(my_road, point=new_point)
+        # 由于pd.Serial与元组的性质类似，对其任何的修改都会创建一个新的对象，
+        # 因此这里add point的地方需要写my_road = Road.add_point_to_road(my_road, point=new_point)
+
+    print('\nMy road geo: ', my_road['geometry'])
+    # output: My road geo:  LINESTRING (2 3, 2.658898529150666 7.195377590750704, 0.2038391080744739 1.7765413565553279, 9.745047694992158 7.185934551413156, 5.788809902421127 2.0784742740679296, 0.5162891813906301 1.2232158625001954)
+    print(np.array(list(my_road['geometry'].coords)))
+    # output:
+    # [[2.         3.        ]
+    #  [2.65889853 7.19537759]
+    #  [0.20383911 1.77654136]
+    #  [9.74504769 7.18593455]
+    #  [5.7888099  2.07847427]
+    #  [0.51628918 1.22321586]]
+
+
 if __name__ == '__main__':
-    example_data_to_roads()
+    example_add_and_modify_road()
