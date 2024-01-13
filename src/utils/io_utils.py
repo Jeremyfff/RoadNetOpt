@@ -65,12 +65,15 @@ def load_dxf(path):
     doc = ezdxf.readfile(path)
     return doc
 
+
 def get_dxf_layers(doc):
     layers = set()
     msp = doc.modelspace()
     for entity in msp:
         layers.add(entity.dxf.layer)
     return layers
+
+
 @timer
 def dxf_to_data(doc):
     msp = doc.modelspace()
@@ -117,6 +120,7 @@ def dxf_to_data(doc):
     print('complete.')
     return data
 
+
 def _get_entity_points_auto(entity):
     if entity.dxftype() == 'LWPOLYLINE':
         points = np.array(entity.get_points())
@@ -127,8 +131,13 @@ def _get_entity_points_auto(entity):
         for point in entity.points():
             points.append([point.xyz[0], point.xyz[1]])
         return points
+    elif entity.dxftype() == 'LINE':
+
+        return [(entity.dxf.start.xyz[0], entity.dxf.start.xyz[1]),
+                (entity.dxf.end.xyz[0], entity.dxf.end.xyz[1])]
     else:
         raise Exception('不支持的类型')
+
 
 @timer
 def save_data(data, path):
@@ -154,6 +163,7 @@ def open_file_window(**kwargs):
     file_path = filedialog.askopenfilename(**kwargs)
     return file_path
 
+
 def save_file_window(**kwargs):
     root = tk.Tk()
     root.withdraw()
@@ -162,6 +172,7 @@ def save_file_window(**kwargs):
         return None
     print(file_path.name)
     return file_path.name
+
 
 if __name__ == "__main__":
     dxf_path = "../../data/和县/现状条件.dxf"

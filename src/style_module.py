@@ -165,23 +165,22 @@ class PlotStyle:
         name = self.region_style_options[i]
         return self.get_region_style_factory_by_name(name)
 
-
     def get_current_road_style_factory_idx(self) -> int:
         return self.current_road_style_option
 
-    def get_current_road_style_factory_name(self)->str:
+    def get_current_road_style_factory_name(self) -> str:
         return self.road_style_options[self.current_road_style_option]
 
     def get_current_building_style_factory_idx(self) -> int:
         return self.current_building_style_option
 
-    def get_current_building_style_factory_name(self)->str:
+    def get_current_building_style_factory_name(self) -> str:
         return self.building_style_options[self.current_building_style_option]
 
     def get_current_region_style_factory_idx(self) -> int:
         return self.current_region_style_option
 
-    def get_current_region_style_factory_name(self)->str:
+    def get_current_region_style_factory_name(self) -> str:
         return self.region_style_options[self.current_region_style_option]
 
     def get_current_road_style_factory(self):
@@ -201,10 +200,6 @@ class PlotStyle:
 
     def set_current_region_style_idx(self, idx: int):
         self.current_region_style_option = idx
-
-
-
-
 
     @staticmethod
     def _imgui_color_picker_template(_name, _dict):
@@ -243,29 +238,118 @@ class PlotStyle:
 
         any_changed |= PlotStyle._imgui_color_picker_template('ROAD_COLOR_BY_STATE', self.ROAD_COLOR_BY_STATE)
         any_changed |= PlotStyle._imgui_value_input_template('ROAD_WIDTH_BY_STATE', self.ROAD_WIDTH_BY_STATE)
+        return any_changed
 
+    def show_imgui_building_style_by_movable_picker(self):
+        any_changed = False
+        any_changed |= PlotStyle._imgui_color_picker_template('BUILDING_COLOR_BY_MOVABLE_TYPE', self.BUILDING_COLOR_BY_MOVABLE_TYPE)
+        return any_changed
 
-    def show_imgui_style_editor(self, road_style_change_callback, building_style_change_callback, region_style_change_callback):
-        road_style_changed= False
+    def show_imgui_building_style_by_style_picker(self):
+        any_changed = False
+        any_changed |= PlotStyle._imgui_color_picker_template('BUILDING_COLOR_BY_STYLE',
+                                                              self.BUILDING_COLOR_BY_STYLE)
+        return any_changed
+
+    def show_imgui_building_style_by_quality_picker(self):
+        any_changed = False
+        any_changed |= PlotStyle._imgui_color_picker_template('BUILDING_COLOR_BY_QUALITY',
+                                                              self.BUILDING_COLOR_BY_QUALITY)
+        return any_changed
+
+    def show_imgui_region_style_by_accessible_picker(self):
+
+        any_changed = False
+        any_changed |= PlotStyle._imgui_color_picker_template('REGION_COLOR_BY_ACCESSIBLE',
+                                                              self.REGION_COLOR_BY_ACCESSIBLE)
+        return any_changed
+
+    def show_imgui_region_style_by_type_picker(self):
+        any_changed = False
+        any_changed |= PlotStyle._imgui_color_picker_template('REGION_COLOR_BY_TYPE',
+                                                              self.REGION_COLOR_BY_TYPE)
+        return any_changed
+
+    def show_imgui_style_editor(self, road_style_change_callback, building_style_change_callback,
+                                region_style_change_callback):
+        road_style_changed = False
         building_style_changed = False
         region_style_changed = False
-        expanded, visible = imgui.collapsing_header(self.name)
+        expanded, visible = imgui.collapsing_header(f'{self.name} SETTINGS',flags= imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
+            if imgui.tree_node('basic settings', imgui.TREE_NODE_DEFAULT_OPEN):
+                changed, self.current_road_style_option = imgui.combo('road display:',
+                                                                      self.current_road_style_option,
+                                                                      self.road_style_options)
+                road_style_changed |= changed
 
-            changed, self.current_road_style_option = imgui.combo('road display:', self.road_style_options,
-                                                             self.current_road_style_option)
-            road_style_changed |= changed
+                changed, self.current_building_style_option = imgui.combo('building display:',
+                                                                          self.current_building_style_option,
+                                                                          self.building_style_options)
+                building_style_changed |= changed
+
+                changed, self.current_region_style_option = imgui.combo('region display:',
+                                                                        self.current_region_style_option,
+                                                                        self.region_style_options)
+                region_style_changed |= changed
+
+                imgui.tree_pop()
+            if imgui.tree_node('advanced settings'):
+                disable_color = (0,0,0,0.2)
+                if self.get_current_road_style_factory_name() == 'level':
+                    road_style_changed |= self.show_imgui_road_style_by_level_picker()
+                    imgui.push_style_color(imgui.COLOR_HEADER, *disable_color)
+                    self.show_imgui_road_style_by_state_picker()
+                    imgui.pop_style_color()
+                elif self.get_current_road_style_factory_name() == 'state':
+                    imgui.push_style_color(imgui.COLOR_HEADER, *disable_color)
+                    self.show_imgui_road_style_by_level_picker()
+                    imgui.pop_style_color()
+                    road_style_changed |= self.show_imgui_road_style_by_state_picker()
+
+                if self.get_current_building_style_factory_name() == 'movable':
+                    building_style_changed |= self.show_imgui_building_style_by_movable_picker()
+                    imgui.push_style_color(imgui.COLOR_HEADER, *disable_color)
+                    self.show_imgui_building_style_by_style_picker()
+                    self.show_imgui_building_style_by_quality_picker()
+                    imgui.pop_style_color()
+                elif self.get_current_region_style_factory_name() == 'style':
+                    imgui.push_style_color(imgui.COLOR_HEADER, *disable_color)
+                    self.show_imgui_building_style_by_movable_picker()
+                    imgui.pop_style_color()
+                    building_style_changed |= self.show_imgui_building_style_by_style_picker()
+                    imgui.push_style_color(imgui.COLOR_HEADER, *disable_color)
+                    self.show_imgui_building_style_by_quality_picker()
+                    imgui.pop_style_color()
+                elif self.get_current_building_style_factory_name() == 'quality':
+                    imgui.push_style_color(imgui.COLOR_HEADER, *disable_color)
+                    self.show_imgui_building_style_by_movable_picker()
+                    self.show_imgui_building_style_by_style_picker()
+                    imgui.pop_style_color()
+                    building_style_changed |= self.show_imgui_building_style_by_quality_picker()
+
+                if self.get_current_region_style_factory_name() == 'accessible':
+                    region_style_changed |= self.show_imgui_region_style_by_accessible_picker()
+                    imgui.push_style_color(imgui.COLOR_HEADER, *disable_color)
+                    self.show_imgui_region_style_by_type_picker()
+                    imgui.pop_style_color()
+                elif self.get_current_region_style_factory_name() == 'region_type':
+                    imgui.push_style_color(imgui.COLOR_HEADER, *disable_color)
+                    self.show_imgui_region_style_by_accessible_picker()
+                    imgui.pop_style_color()
+                    region_style_changed |= self.show_imgui_region_style_by_type_picker()
+                imgui.tree_pop()
 
 
-            changed, self.current_building_style_option = imgui.combo('building display:', self.building_style_options,
-                                                                 self.current_building_style_option)
-            building_style_changed |= changed
 
-            changed, self.current_region_style_option = imgui.combo('region display:', self.region_style_options,
-                                                               self.current_region_style_option)
-            region_style_changed |= changed
+        if road_style_changed and road_style_change_callback:
+            road_style_change_callback()
+        if building_style_changed and building_style_change_callback:
+            building_style_change_callback()
+        if region_style_changed and region_style_change_callback:
+            region_style_change_callback()
 
-            changed = self.show_imgui_road_style_by_level_picker()
+
 class StyleManager:
     instance: 'StyleManager' = None
 

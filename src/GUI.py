@@ -133,7 +133,7 @@ def imgui_image_window():
             if selected:
                 imgui.image(texture.texture_id, texture.width, texture.height)
 
-                # imgui_main_texture_subwindow()
+                imgui_main_texture_subwindow()
                 mTextureInfo['last updated'] = str(texture.last_update_time)
                 mTextureInfo['texture size'] = f"{texture.width} , {texture.height}"
                 mTextureInfo['x_lim'] = str(texture.x_lim)
@@ -248,6 +248,12 @@ def imgui_dxf_subwindow():
 def imgui_info_subwindow():
     global mInfoWindowOpened, mFrameTime, mHoveringInfoSubWindow
     if mInfoWindowOpened:
+        if mFirstLoop:
+            window_width = 400
+            windows_height = 400
+            screen_width, screen_height = pygame.display.get_window_size()
+            imgui.set_next_window_position(screen_width - window_width, 32)
+            imgui.set_next_window_size(window_width, windows_height)
         expanded, mInfoWindowOpened = imgui.begin('信息窗口', True)
         mHoveringInfoSubWindow = is_hovering_window()
         if mFrameTime == 0:
