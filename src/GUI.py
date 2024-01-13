@@ -1,4 +1,3 @@
-
 import time
 import imgui
 import pandas as pd
@@ -39,6 +38,12 @@ mImageWindowInnerSize = (0, 0)
 mImageWindowInnerPos = (0, 0)
 mImageWindowMousePos = (0, 0)
 
+mHoveringImageWindow = False
+mHoveringInfoSubWindow = False
+mHoveringDxfSubWindow = False
+mHoveringLoggingSubWindow = False
+mHoveringMainTextureSubWindow = False
+
 mSelectedRoads = {}  # 被选中的道路 dict{uid:road}
 
 mDxfPath = r'D:/M.Arch/2024Spr/RoadNetworkOptimization/RoadNetOpt/data/和县/simplified_data.dxf'
@@ -61,7 +66,6 @@ mBuildingGDFCluster = {'movable': {key: True for key in BuildingMovableType},
 mRegionGDFCluster = {'accessible': {key: True for key in RegionAccessibleType},
                      'region_type': {key: True for key in RegionType}}
 
-
 mRoadDisplayOptions = ['level', 'state']
 mCurrentRoadDisplayOption = 0
 mBuildingDisplayOptions = ['movable', 'style', 'quality']
@@ -69,11 +73,11 @@ mCurrentBuildingDisplayOption = 0
 mRegionDisplayOptions = ['accessible', 'quality', 'region_type']
 mCurrentRegionDisplayOption = 0
 
-
 mTmpPopupInputValue = ''
 mShowHelpInfo = True
 mFrameTime = 0
 mFirstLoop = True
+
 
 def imgui_main_window():
     global lst_time, mDxfWindowOpened
@@ -106,7 +110,7 @@ def imgui_main_window():
 
 
 def imgui_image_window():
-    global mImageWindowSize, mImageWindowPos, mImageWindowInnerSize, mImageWindowInnerPos, mImageWindowMousePos
+    global mImageWindowSize, mImageWindowPos, mImageWindowInnerSize, mImageWindowInnerPos, mImageWindowMousePos, mHoveringImageWindow
     screen_width, screen_height = pygame.display.get_window_size()
     flags = imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_COLLAPSE | imgui.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS
     imgui.set_next_window_size(screen_width - LEFT_WINDOW_WIDTH, screen_height - BOTTOM_WINDOW_HEIGHT)
@@ -119,6 +123,7 @@ def imgui_image_window():
     vec1 = (int(imgui.get_mouse_position()[0]), int(imgui.get_mouse_position()[1]))
     vec2 = mImageWindowInnerPos
     mImageWindowMousePos = (vec1[0] - vec2[0], vec1[1] - vec2[1])
+    mHoveringImageWindow = is_hovering_window()
     textures_to_delete = set()
     flags = imgui.TAB_BAR_AUTO_SELECT_NEW_TABS | imgui.TAB_BAR_TAB_LIST_POPUP_BUTTON
     with imgui.begin_tab_bar('image_tab_bar', flags=flags):
@@ -129,7 +134,7 @@ def imgui_image_window():
             if selected:
                 imgui.image(texture.texture_id, texture.width, texture.height)
 
-                imgui_main_texture_subwindow()
+                # imgui_main_texture_subwindow()
                 mTextureInfo['last updated'] = str(texture.last_update_time)
                 mTextureInfo['texture size'] = f"{texture.width} , {texture.height}"
                 mTextureInfo['x_lim'] = str(texture.x_lim)
@@ -170,34 +175,44 @@ def imgui_bottom_window():
 
     imgui.end()
 
+
 def imgui_main_texture_subwindow():
-    global mCurrentRoadDisplayOption,mCurrentBuildingDisplayOption, mCurrentRegionDisplayOption
+    global mCurrentRoadDisplayOption, mCurrentBuildingDisplayOption, mCurrentRegionDisplayOption, mHoveringMainTextureSubWindow
     if mFirstLoop:
         imgui.set_next_window_position(*mImageWindowInnerPos)
+
     flags = imgui.WINDOW_NO_TITLE_BAR
     expanded, _ = imgui.begin('main texture', False, flags)
+    mHoveringMainTextureSubWindow = is_hovering_window()
     any_changed = False
     changed, mCurrentRoadDisplayOption = imgui.combo('road display:', mCurrentRoadDisplayOption, mRoadDisplayOptions)
     any_changed |= changed
-    changed, mCurrentBuildingDisplayOption = imgui.combo('building display:', mCurrentBuildingDisplayOption, mBuildingDisplayOptions)
+    changed, mCurrentBuildingDisplayOption = imgui.combo('building display:', mCurrentBuildingDisplayOption,
+                                                         mBuildingDisplayOptions)
     any_changed |= changed
-    changed, mCurrentRegionDisplayOption = imgui.combo('region display:', mCurrentRegionDisplayOption, mRegionDisplayOptions)
+    changed, mCurrentRegionDisplayOption = imgui.combo('region display:', mCurrentRegionDisplayOption,
+                                                       mRegionDisplayOptions)
     any_changed |= changed
     if any_changed:
         StyleManager.instance.display_style.set_current_road_style_name(mRoadDisplayOptions[mCurrentRoadDisplayOption])
-        StyleManager.instance.display_style.set_current_building_style_name(mBuildingDisplayOptions[mCurrentBuildingDisplayOption])
-        StyleManager.instance.display_style.set_current_region_style_name(mRegionDisplayOptions[mCurrentRegionDisplayOption])
+        StyleManager.instance.display_style.set_current_building_style_name(
+            mBuildingDisplayOptions[mCurrentBuildingDisplayOption])
+        StyleManager.instance.display_style.set_current_region_style_name(
+            mRegionDisplayOptions[mCurrentRegionDisplayOption])
         GraphicManager.instance.main_texture.clear_cache()
-    if StyleManager.instance.display_style.show_imgui_road_color_picker():
+
+    if StyleManager.instance.display_style.show_imgui_road_level_color_picker():
         GraphicManager.instance.main_texture.clear_cache()
 
     imgui.end()
 
+
 def imgui_dxf_subwindow():
-    global mDxfWindowOpened, mDxfPath, mDxfDoc, mLoadDxfNextFrame, mDxfLayers
+    global mDxfWindowOpened, mDxfPath, mDxfDoc, mLoadDxfNextFrame, mDxfLayers, mHoveringDxfSubWindow
 
     if mDxfWindowOpened:
         expanded, mDxfWindowOpened = imgui.begin('dxf文件转换工具', True)
+        mHoveringDxfSubWindow = is_hovering_window()
         imgui.text('DXF path')
         imgui.push_id('dxf_path')
         changed, mDxfPath = imgui.input_text('', mDxfPath)
@@ -246,9 +261,10 @@ def imgui_dxf_subwindow():
 
 
 def imgui_info_subwindow():
-    global mInfoWindowOpened, mFrameTime
+    global mInfoWindowOpened, mFrameTime, mHoveringInfoSubWindow
     if mInfoWindowOpened:
         expanded, mInfoWindowOpened = imgui.begin('信息窗口', True)
+        mHoveringInfoSubWindow = is_hovering_window()
         if mFrameTime == 0:
             mFrameTime += 1e-4
         imgui.text(f'fps {(1.0 / mFrameTime):.1f}')
@@ -261,17 +277,20 @@ def imgui_info_subwindow():
 
         imgui.text('')
         imgui.text('图像缓冲区:')
-        mGraphicCacheInfo['cached highlighted img'] = GraphicManager.instance.main_texture.cached_highlighted_road_data is not None
+        mGraphicCacheInfo[
+            'cached highlighted img'] = GraphicManager.instance.main_texture.cached_highlighted_road_data is not None
         mGraphicCacheInfo['cached road img'] = GraphicManager.instance.main_texture.cached_road_data is not None
         mGraphicCacheInfo['cached road idx img'] = GraphicManager.instance.main_texture.cached_road_idx is not None
-        imgui_dict_viewer_component(mGraphicCacheInfo, 'graphic cache info', 'cache type', 'has data', lambda value: str(value))
+        imgui_dict_viewer_component(mGraphicCacheInfo, 'graphic cache info', 'cache type', 'has data',
+                                    lambda value: str(value))
         imgui.end()
 
 
 def imgui_logging_subwindow():
-    global mLoggingWindowOpened
+    global mLoggingWindowOpened, mHoveringLoggingSubWindow
     if mLoggingWindowOpened:
         expanded, mLoggingWindowOpened = imgui.begin('日志窗口', True)
+        mHoveringLoggingSubWindow = is_hovering_window()
         imgui.text('功能待实现')
         imgui.end()
 
@@ -473,7 +492,8 @@ def imgui_geo_page():
 
             if imgui.button('plot all gdf'):
                 GraphicManager.instance.plot_to('all',
-                                        [Road.get_all_roads(), Building.get_all_buildings(), Region.get_all_regions()])
+                                                [Road.get_all_roads(), Building.get_all_buildings(),
+                                                 Region.get_all_regions()])
 
             if imgui.button('plot by idx'):
                 GraphicManager.instance.plot_to2('roads', Road.plot_using_idx, roads=Road.get_all_roads())
@@ -526,11 +546,14 @@ def imgui_geo_page():
             if imgui.button('update main'):
                 update_main_graphic()
             if imgui.button('show cached road data'):
-                GraphicManager.instance.bilt_to('cached road data', GraphicManager.instance.main_texture.cached_road_data)
+                GraphicManager.instance.bilt_to('cached road data',
+                                                GraphicManager.instance.main_texture.cached_road_data)
             if imgui.button('show cached road idx data'):
-                GraphicManager.instance.bilt_to('cached road idx data', GraphicManager.instance.main_texture.cached_road_idx)
+                GraphicManager.instance.bilt_to('cached road idx data',
+                                                GraphicManager.instance.main_texture.cached_road_idx)
             if imgui.button('show cached highlighted road data'):
-                GraphicManager.instance.bilt_to('cached highlighted road data', GraphicManager.instance.main_texture.cached_highlighted_road_data)
+                GraphicManager.instance.bilt_to('cached highlighted road data',
+                                                GraphicManager.instance.main_texture.cached_highlighted_road_data)
         imgui.tree_pop()
     imgui.pop_id()
 
@@ -633,6 +656,7 @@ mSpinThread = {}
 SPIN_ANI_FRAME = 40  # frame per sec
 SPIN_TIME = 1  # sec
 
+
 def imgui_spinner(name, width=20, height=20):
     if name not in mSpinStartTime:
         return
@@ -686,7 +710,8 @@ def update_main_graphic():
         print('[GUI][update_main_graphic] redraw all')
         GraphicManager.instance.main_texture.clear_cache()
 
-    if imgui.is_mouse_clicked(imgui.MOUSE_BUTTON_LEFT):
+    if imgui.is_mouse_clicked(
+            imgui.MOUSE_BUTTON_LEFT) and mHoveringImageWindow and not mHoveringMainTextureSubWindow and not mHoveringInfoSubWindow and not mHoveringDxfSubWindow:
         on_road, idx = GraphicManager.instance.main_texture.on_left_mouse_click(mImageWindowMousePos)
         if on_road:
             try:
@@ -696,12 +721,15 @@ def update_main_graphic():
             except:
                 pass
 
-
     GraphicManager.instance.main_texture.update(window_size=mImageWindowSize,
-                                        selected_roads = mSelectedRoads)
+                                                selected_roads=mSelectedRoads)
 
 
-
+def is_hovering_window():
+    _min = imgui.get_window_position()
+    _size = imgui.get_window_size()
+    _max = (_min[0] + _size[0], _min[1] + _size[1])
+    return imgui.is_mouse_hovering_rect(_min[0], _min[1], _max[0], _max[1])
 
 
 if __name__ == "__main__":
@@ -739,7 +767,6 @@ if __name__ == "__main__":
 
     imgui_init_spinner()
     graphic_manager = GraphicManager()
-    
 
     lst_time = time.time()
     while True:
