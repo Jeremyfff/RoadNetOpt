@@ -1,11 +1,15 @@
-import imgui
+import os.path
+import pickle
 
+import imgui
+from utils import io_utils
 from utils import RoadLevel, RoadState
 from utils import BuildingMovableType, BuildingStyle, BuildingQuality
 from utils import RegionAccessibleType
 
 
-class PlotStyle:
+class StyleScheme:
+    """风格方案"""
     def __init__(self, name):
         self.name = name
         self.ROAD_COLOR_BY_LEVEL = {
@@ -85,6 +89,31 @@ class PlotStyle:
         self.region_style_options = list(self.region_style_factory_dict.keys())
         self.current_region_style_option = 0
 
+        self.default_style_path = rf'../config/styles/{self.name}.style'
+        if os.path.exists(self.default_style_path):
+            self.load_from_file(self.default_style_path)
+
+    def save_to_file(self, file_path):
+        if not os.path.exists(os.path.dirname(file_path)):
+            os.makedirs(os.path.dirname(file_path))
+        with open(file_path, 'wb') as file:
+            pickle.dump(self, file)
+        print(f'[{self.name}] style saved to {file_path}')
+
+    def load_from_file(self, file_path):
+        with open(file_path, 'rb') as file:
+            loaded_StyleScheme: 'StyleScheme' = pickle.load(file)
+        print(f'[{self.name}] loading style from {file_path}')
+        self.ROAD_COLOR_BY_LEVEL = loaded_StyleScheme.ROAD_COLOR_BY_LEVEL
+        self.ROAD_WIDTH_BY_LEVEL = loaded_StyleScheme.ROAD_WIDTH_BY_LEVEL
+        self.ROAD_COLOR_BY_STATE = loaded_StyleScheme.ROAD_COLOR_BY_STATE
+        self.ROAD_WIDTH_BY_STATE = loaded_StyleScheme.ROAD_WIDTH_BY_STATE
+        self.BUILDING_COLOR_BY_MOVABLE_TYPE = loaded_StyleScheme.BUILDING_COLOR_BY_MOVABLE_TYPE
+        self.BUILDING_COLOR_BY_STYLE = loaded_StyleScheme.BUILDING_COLOR_BY_STYLE
+        self.BUILDING_COLOR_BY_QUALITY = loaded_StyleScheme.BUILDING_COLOR_BY_QUALITY
+        self.REGION_COLOR_BY_ACCESSIBLE = loaded_StyleScheme.REGION_COLOR_BY_ACCESSIBLE
+        self.REGION_COLOR_BY_TYPE = loaded_StyleScheme.REGION_COLOR_BY_TYPE
+
     def road_level_style_factory(self, roads):
         colors, width = [], []
         for uid, road in roads.iterrows():
@@ -105,7 +134,7 @@ class PlotStyle:
             colors.append(self.BUILDING_COLOR_BY_MOVABLE_TYPE[building['movable']])
             face_color.append(self.BUILDING_COLOR_BY_MOVABLE_TYPE[building['movable']])
             edge_color.append(self.BUILDING_COLOR_BY_MOVABLE_TYPE[building['movable']])
-            line_width.append(None)
+            line_width.append(0)
         return colors, face_color, edge_color, line_width
 
     def building_style_style_factory(self, buildings):
@@ -114,7 +143,7 @@ class PlotStyle:
             colors.append(self.BUILDING_COLOR_BY_STYLE[building['style']])
             face_color.append(self.BUILDING_COLOR_BY_STYLE[building['style']])
             edge_color.append(self.BUILDING_COLOR_BY_STYLE[building['style']])
-            line_width.append(None)
+            line_width.append(0)
         return colors, face_color, edge_color, line_width
 
     def building_quality_style_factory(self, buildings):
@@ -123,7 +152,7 @@ class PlotStyle:
             colors.append(self.BUILDING_COLOR_BY_QUALITY[building['quality']])
             face_color.append(self.BUILDING_COLOR_BY_QUALITY[building['quality']])
             edge_color.append(self.BUILDING_COLOR_BY_QUALITY[building['quality']])
-            line_width.append(None)
+            line_width.append(1)
         return colors, face_color, edge_color, line_width
 
     def region_accessible_style_factory(self, regions):
@@ -229,45 +258,45 @@ class PlotStyle:
 
     def show_imgui_road_style_by_level_picker(self):
         any_changed = False
-        any_changed |= PlotStyle._imgui_color_picker_template('ROAD_COLOR_BY_LEVEL', self.ROAD_COLOR_BY_LEVEL)
-        any_changed |= PlotStyle._imgui_value_input_template('ROAD_WIDTH_BY_LEVEL', self.ROAD_WIDTH_BY_LEVEL)
+        any_changed |= StyleScheme._imgui_color_picker_template('ROAD_COLOR_BY_LEVEL', self.ROAD_COLOR_BY_LEVEL)
+        any_changed |= StyleScheme._imgui_value_input_template('ROAD_WIDTH_BY_LEVEL', self.ROAD_WIDTH_BY_LEVEL)
         return any_changed
 
     def show_imgui_road_style_by_state_picker(self):
         any_changed = False
 
-        any_changed |= PlotStyle._imgui_color_picker_template('ROAD_COLOR_BY_STATE', self.ROAD_COLOR_BY_STATE)
-        any_changed |= PlotStyle._imgui_value_input_template('ROAD_WIDTH_BY_STATE', self.ROAD_WIDTH_BY_STATE)
+        any_changed |= StyleScheme._imgui_color_picker_template('ROAD_COLOR_BY_STATE', self.ROAD_COLOR_BY_STATE)
+        any_changed |= StyleScheme._imgui_value_input_template('ROAD_WIDTH_BY_STATE', self.ROAD_WIDTH_BY_STATE)
         return any_changed
 
     def show_imgui_building_style_by_movable_picker(self):
         any_changed = False
-        any_changed |= PlotStyle._imgui_color_picker_template('BUILDING_COLOR_BY_MOVABLE_TYPE', self.BUILDING_COLOR_BY_MOVABLE_TYPE)
+        any_changed |= StyleScheme._imgui_color_picker_template('BUILDING_COLOR_BY_MOVABLE_TYPE', self.BUILDING_COLOR_BY_MOVABLE_TYPE)
         return any_changed
 
     def show_imgui_building_style_by_style_picker(self):
         any_changed = False
-        any_changed |= PlotStyle._imgui_color_picker_template('BUILDING_COLOR_BY_STYLE',
-                                                              self.BUILDING_COLOR_BY_STYLE)
+        any_changed |= StyleScheme._imgui_color_picker_template('BUILDING_COLOR_BY_STYLE',
+                                                                self.BUILDING_COLOR_BY_STYLE)
         return any_changed
 
     def show_imgui_building_style_by_quality_picker(self):
         any_changed = False
-        any_changed |= PlotStyle._imgui_color_picker_template('BUILDING_COLOR_BY_QUALITY',
-                                                              self.BUILDING_COLOR_BY_QUALITY)
+        any_changed |= StyleScheme._imgui_color_picker_template('BUILDING_COLOR_BY_QUALITY',
+                                                                self.BUILDING_COLOR_BY_QUALITY)
         return any_changed
 
     def show_imgui_region_style_by_accessible_picker(self):
 
         any_changed = False
-        any_changed |= PlotStyle._imgui_color_picker_template('REGION_COLOR_BY_ACCESSIBLE',
-                                                              self.REGION_COLOR_BY_ACCESSIBLE)
+        any_changed |= StyleScheme._imgui_color_picker_template('REGION_COLOR_BY_ACCESSIBLE',
+                                                                self.REGION_COLOR_BY_ACCESSIBLE)
         return any_changed
 
     def show_imgui_region_style_by_type_picker(self):
         any_changed = False
-        any_changed |= PlotStyle._imgui_color_picker_template('REGION_COLOR_BY_TYPE',
-                                                              self.REGION_COLOR_BY_TYPE)
+        any_changed |= StyleScheme._imgui_color_picker_template('REGION_COLOR_BY_TYPE',
+                                                                self.REGION_COLOR_BY_TYPE)
         return any_changed
 
     def show_imgui_style_editor(self, road_style_change_callback, building_style_change_callback,
@@ -275,7 +304,7 @@ class PlotStyle:
         road_style_changed = False
         building_style_changed = False
         region_style_changed = False
-        expanded, visible = imgui.collapsing_header(f'{self.name} SETTINGS',flags= imgui.TREE_NODE_DEFAULT_OPEN)
+        expanded, visible = imgui.collapsing_header(f'{self.name} 样式方案',flags= imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
             if imgui.tree_node('basic settings', imgui.TREE_NODE_DEFAULT_OPEN):
                 changed, self.current_road_style_option = imgui.combo('road display:',
@@ -338,6 +367,17 @@ class PlotStyle:
                     self.show_imgui_region_style_by_accessible_picker()
                     imgui.pop_style_color()
                     region_style_changed |= self.show_imgui_region_style_by_type_picker()
+                if imgui.button('保存为默认配置'):
+                    self.save_to_file(self.default_style_path)
+                if imgui.button('从磁盘加载配置'):
+                    path = io_utils.open_file_window(filetypes=[('Style Files', '.style')])
+                    if path is not None and path != '':
+                        self.load_from_file(path)
+                if imgui.button('保存配置'):
+                    path = io_utils.save_file_window(defaultextension='.style',
+                                              filetypes=[('Style Files', '.style')])
+                    if path is not None and path != '':
+                        self.save_to_file(path)
                 imgui.tree_pop()
 
 
@@ -357,8 +397,8 @@ class StyleManager:
         assert StyleManager.instance is None
         StyleManager.instance = self
 
-        self.display_style = PlotStyle('DISPLAY')
-        self.env_style = PlotStyle('ENV')
+        self.display_style = StyleScheme('DISPLAY')
+        self.env_style = StyleScheme('ENV')
 
 
 style_manager = StyleManager()

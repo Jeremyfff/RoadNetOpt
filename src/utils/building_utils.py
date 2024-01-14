@@ -1,4 +1,5 @@
 from enum import Enum
+from utils.common_utils import imgui_item_selector_component
 
 
 class BuildingMovableType(Enum):
@@ -21,3 +22,17 @@ class BuildingQuality(Enum):
     FAIR = 1
     POOR = 2
     UNDEFINED = -1
+
+
+class BuildingCluster:
+    def __init__(self):
+        self.cluster = {'movable': {key: True for key in BuildingMovableType},
+                        'style': {key: True for key in BuildingStyle},
+                        'quality': {key: True for key in BuildingQuality}}
+
+    def show_imgui_cluster_editor_button(self):
+        any_change = False
+        any_change |= imgui_item_selector_component('building movable cluster', self.cluster['movable'])
+        any_change |= imgui_item_selector_component('building style cluster', self.cluster['style'])
+        any_change |= imgui_item_selector_component('building quality cluster', self.cluster['quality'])
+        return any_change

@@ -5,7 +5,8 @@ from shapely.geometry import Polygon
 import shapely.plotting
 from geo import Object
 from utils.point_utils import xywh2points
-from utils import RegionAccessibleType, RegionType
+from utils import RegionAccessibleType, RegionType, RegionCluster
+import pandas as pd
 import uuid
 
 
@@ -150,6 +151,7 @@ class Region(Object):
     @staticmethod
     def get_region_attrs():
         return Region.__region_attrs
+
     @staticmethod
     def get_region_by_uid(uid):
         region = Region.__region_gdf.loc[uid]
@@ -178,6 +180,29 @@ class Region(Object):
     def get_all_regions():
         return Region.__region_gdf
 
+    @staticmethod
+    def get_regions_by_cluster(cluster: RegionCluster):
+        cluster = cluster.cluster
+        uid_sets_by_attr = []
+        for attr in cluster:
+            gdfs = []
+            if all(cluster[attr].values()):
+                print(f'{attr} 全都是True, 跳过')
+                continue
+            for key in cluster[attr]:
+                if cluster[attr][key]:
+                    _gdfs = Region.get_regions_by_attr_and_value(attr, key)
+                    gdfs.append(_gdfs)
+            if len(gdfs) == 0:
+                return None
+            gdf = pd.concat(gdfs, ignore_index=False)
+            uid_sets_by_attr.append(set(gdf.index))
+        if len(uid_sets_by_attr) == 0:
+            print(f'全都为True, 直接返回所有')
+            return Region.get_all_regions()
+        common_uid = list(set.intersection(*uid_sets_by_attr))
+        return Region.get_all_regions().loc[common_uid]
+
     # endregion
 
     # region 编辑修改
@@ -191,11 +216,27 @@ class Region(Object):
     # region 绘图相关
     @staticmethod
     def plot_regions(regions, *args, **kwargs):
+        if regions is None:
+            return
         regions.plot(*args, **kwargs)
 
     @staticmethod
     def plot_all(*args, **kwargs):
         Region.__region_gdf.plot(*args, **kwargs)
+
+    @staticmethod
+    def plot_using_style_factory(regions, style_factory, *args, **kwargs):
+        if regions is None:
+            return
+        colors, face_color, edge_color, line_width = style_factory(regions)
+        regions_copy = regions.copy()
+        regions_copy['colors'] = colors
+        regions_copy['edge_color'] = edge_color
+        regions_copy['line_width'] = line_width
+        regions_copy.plot(color=regions_copy['colors'],
+                          edgecolor=regions_copy['edge_color'],
+                          linewidth=regions_copy['line_width'],
+                          *args, **kwargs)
 
     # endregion
 

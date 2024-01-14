@@ -10,7 +10,7 @@ from shapely.geometry import Polygon, LineString, Point
 from shapely.ops import split
 import networkx as nx
 from geo import Object
-from utils import RoadLevel, RoadState, point_utils, polyline_utils, road_utils
+from utils import RoadLevel, RoadState, point_utils, polyline_utils, road_utils, RoadCluster
 import style_module
 import osmnx as ox
 import geopandas as gpd
@@ -44,6 +44,7 @@ class Road(Object):
 
     _flag_cached_graph_need_update = False
     __uid = uuid.uuid4()
+
 
     # region 节点相关
     @staticmethod
@@ -350,6 +351,33 @@ class Road(Object):
         roads2 = Road.get_roads_by_attr_and_value('v', node_uid)
         return pd.concat([roads1, roads2])
 
+    @staticmethod
+    def get_roads_by_cluster(cluster: RoadCluster):
+        cluster = cluster.cluster
+        uid_sets_by_attr = []
+        for attr in cluster:
+            gdfs = []
+            if all(cluster[attr].values()):
+                print(f'{attr} 全都是True, 跳过')
+                continue
+            for key in cluster[attr]:
+                if cluster[attr][key]:
+                    _gdfs = Road.get_roads_by_attr_and_value(attr, key)
+                    gdfs.append(_gdfs)
+            if len(gdfs) == 0:
+                return None
+            gdf = pd.concat(gdfs, ignore_index=False)
+            uid_sets_by_attr.append(set(gdf.index))
+        if len(uid_sets_by_attr) == 0:
+            print(f'全都为True, 直接返回所有')
+            return Road.get_all_roads()
+        common_uid = list(set.intersection(*uid_sets_by_attr))
+        return Road.get_all_roads().loc[common_uid]
+
+
+
+
+
     # endregion
 
     # region 编辑修改
@@ -485,6 +513,8 @@ class Road(Object):
     # region 绘图相关
     @staticmethod
     def plot_roads(roads, *args, **kwargs):
+        if roads is None:
+            return
         roads = gpd.GeoDataFrame(roads, geometry='geometry')
         roads.plot(*args, **kwargs)
 
@@ -496,6 +526,8 @@ class Road(Object):
 
     @staticmethod
     def plot_using_idx(roads, *args,**kwargs):
+        if roads is None:
+            return
         line_width = [5] * len(Road.__edge_gdf)
         colors = [id_to_rgb(i) for i in range(len(Road.__edge_gdf))]
 
@@ -508,7 +540,8 @@ class Road(Object):
 
     @staticmethod
     def plot_using_style_factory(roads, style_factory, *args,**kwargs):
-
+        if roads is None:
+            return
         colors, line_width = style_factory(roads)
         roads_copy = roads.copy()
         roads_copy['colors'] = colors
