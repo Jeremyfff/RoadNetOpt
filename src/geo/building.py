@@ -6,10 +6,11 @@ from shapely.geometry import Polygon
 import shapely.plotting
 from tqdm import tqdm
 from numba import jit, typed
+import pandas as pd
 from geo import Object
 from utils.common_utils import timer
 from utils.point_utils import xywh2points
-from utils import BuildingMovableType, BuildingStyle, BuildingQuality
+from utils import BuildingMovableType, BuildingStyle, BuildingQuality, BuildingCluster
 import style_module
 
 
@@ -170,6 +171,7 @@ class Building(Object):
     @staticmethod
     def get_building_attrs():
         return Building.__building_attrs
+
     @staticmethod
     def get_building_by_uid(uid):
         building = Building.__building_gdf.loc[uid]
@@ -198,6 +200,29 @@ class Building(Object):
     def get_all_buildings():
         return Building.__building_gdf
 
+    @staticmethod
+    def get_buildings_by_cluster(cluster: BuildingCluster):
+        cluster = cluster.cluster
+        uid_sets_by_attr = []
+        for attr in cluster:
+            gdfs = []
+            if all(cluster[attr].values()):
+                print(f'{attr} 全都是True, 跳过')
+                continue
+            for key in cluster[attr]:
+                if cluster[attr][key]:
+                    _gdfs = Building.get_buildings_by_attr_and_value(attr, key)
+                    gdfs.append(_gdfs)
+            if len(gdfs) == 0:
+                return None
+            gdf = pd.concat(gdfs, ignore_index=False)
+            uid_sets_by_attr.append(set(gdf.index))
+        if len(uid_sets_by_attr) == 0:
+            print(f'全都为True, 直接返回所有')
+            return Building.get_all_buildings()
+        common_uid = list(set.intersection(*uid_sets_by_attr))
+        return Building.get_all_buildings().loc[common_uid]
+
     # endregion
 
     # region 编辑修改
@@ -211,12 +236,27 @@ class Building(Object):
     # region 绘图相关
     @staticmethod
     def plot_buildings(buildings, *args, **kwargs):
+        if buildings is None:
+            return
         buildings.plot(*args, **kwargs)
 
     @staticmethod
-    @timer
     def plot_all(*args, **kwargs):
         Building.__building_gdf.plot(*args, **kwargs)
+
+    @staticmethod
+    def plot_using_style_factory(buildings, style_factory, *args, **kwargs):
+        if buildings is None:
+            return
+        colors, face_color, edge_color, line_width = style_factory(buildings)
+        buildings_copy = buildings.copy()
+        buildings_copy['colors'] = colors
+        buildings_copy['edge_color'] = edge_color
+        buildings_copy['line_width'] = line_width
+        buildings_copy.plot(color=buildings_copy['colors'],
+                            edgecolor=buildings_copy['edge_color'],
+                            linewidth=buildings_copy['line_width'],
+                            *args, **kwargs)
 
     # endregion
 
@@ -265,11 +305,11 @@ class Building(Object):
     def quick_buildings():
         points = xywh2points(44, 63, 42, 35)
         uid = Building.add_building_by_coords(points,
-                                        movable=BuildingMovableType.DEMOLISHABLE,
-                                        quality=BuildingQuality.GOOD,
-                                        style=BuildingStyle.NORMAL,
-                                        enabled=True
-                                        )
+                                              movable=BuildingMovableType.DEMOLISHABLE,
+                                              quality=BuildingQuality.GOOD,
+                                              style=BuildingStyle.NORMAL,
+                                              enabled=True
+                                              )
 
         return [uid]
     # endregion

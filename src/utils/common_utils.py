@@ -2,6 +2,7 @@ import logging
 
 import numpy as np
 import time
+import imgui
 
 
 def get_arg(kwargs: dict, name: str, default: any = None):
@@ -14,7 +15,10 @@ def get_arg(kwargs: dict, name: str, default: any = None):
 def gaussian(x, mu, sigma):
     return np.exp(-((x - mu) ** 2) / (2 * sigma ** 2)) / (sigma * np.sqrt(2 * np.pi))
 
+
 encode_ratio = 3
+
+
 def id_to_rgb(i):
     ii = i * encode_ratio
     # 最大可编码16,777,216 / 3个数
@@ -24,10 +28,12 @@ def id_to_rgb(i):
     # print(f'i = {i}, r = {r}, g = {g}, b = {b}')
     return (r, g, b)
 
+
 def rgb_to_id(color):
     id = color[0] * 256 * 256 + color[1] * 256 + color[2]
     id = round(id / encode_ratio)
     return id
+
 
 def timer(func):
     def wrapper(*args, **kwargs):
@@ -68,6 +74,7 @@ class DuplicateFilter:
     def __enter__(self):
         self.logger.addFilter(self)
         return self
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.duplicate_count != 1:
             print(f"(the above msg repeated {self.duplicate_count} times)")
@@ -85,6 +92,18 @@ def duplicate_filter(logger):
         return wrapper
 
     return decorator
+
+
+def imgui_item_selector_component(label, dict):
+    any_clicked = False
+    if imgui.button(label):
+        imgui.open_popup(f'{label} selector')
+    if imgui.begin_popup(f'{label} selector'):
+        for key in dict:
+            clicked, dict[key] = imgui.checkbox(str(key), dict[key])
+            any_clicked |= clicked
+        imgui.end_popup()
+    return any_clicked
 
 
 if __name__ == '__main__':

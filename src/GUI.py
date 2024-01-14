@@ -1,3 +1,4 @@
+import os
 import time
 import imgui
 import pandas as pd
@@ -9,13 +10,15 @@ from OpenGL.GL import *
 import threading
 import sys
 import numpy as np
+
+import graphic_module
 from graphic_module import GraphicManager, create_texture_from_array, update_texture
 from geo import Road, Building, Region
 from utils import io_utils
 from utils import RoadLevel, RoadState, BuildingMovableType, BuildingStyle, BuildingQuality, RegionAccessibleType, \
-    RegionType
+    RegionType, RoadCluster, BuildingCluster, RegionCluster
 from pympler.asizeof import asizeof
-from style_module import StyleManager, PlotStyle
+from style_module import StyleManager, StyleScheme
 import ctypes
 # ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 
@@ -23,6 +26,7 @@ import ctypes
 * Powered by DearImGui
 * Online Manual - https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 """
+
 
 LEFT_WINDOW_WIDTH = 400
 BOTTOM_WINDOW_HEIGHT = 32
@@ -59,11 +63,9 @@ mGDFInfo = {}
 mGraphicCacheInfo = {}
 mTextureInfo = {}
 
-mRoadGDFCluster = {'level': {key: True for key in RoadLevel}, 'state': {key: True for key in RoadState}}
-mBuildingGDFCluster = {'movable': {key: True for key in BuildingMovableType},
-                       'style': {key: True for key in BuildingStyle}, 'quality': {key: True for key in BuildingQuality}}
-mRegionGDFCluster = {'accessible': {key: True for key in RegionAccessibleType},
-                     'region_type': {key: True for key in RegionType}}
+mRoadGDFCluster = RoadCluster()
+mBuildingGDFCluster = BuildingCluster()
+mRegionGDFCluster = RegionCluster()
 
 mRoadDisplayOptions = ['level', 'state']
 mCurrentRoadDisplayOption = 0
@@ -77,6 +79,7 @@ mShowHelpInfo = True
 mFrameTime = 0
 mFirstLoop = True
 
+mIconTextures = {}
 
 def imgui_main_window():
     global lst_time, mDxfWindowOpened
@@ -132,8 +135,8 @@ def imgui_image_window():
             selected, opened = imgui.begin_tab_item(texture.name, imgui.TAB_ITEM_TRAILING)
             if selected:
                 imgui.image(texture.texture_id, texture.width, texture.height)
-
-                imgui_main_texture_subwindow()
+                if texture.name == 'main':
+                    imgui_main_texture_subwindow()
                 mTextureInfo['last updated'] = str(texture.last_update_time)
                 mTextureInfo['texture size'] = f"{texture.width} , {texture.height}"
                 mTextureInfo['x_lim'] = str(texture.x_lim)
@@ -177,18 +180,32 @@ def imgui_bottom_window():
 
 def imgui_main_texture_subwindow():
     global mCurrentRoadDisplayOption, mCurrentBuildingDisplayOption, mCurrentRegionDisplayOption, mHoveringMainTextureSubWindow
-    if mFirstLoop:
-        imgui.set_next_window_position(*mImageWindowInnerPos)
 
-    flags = imgui.WINDOW_NO_TITLE_BAR
-    expanded, _ = imgui.begin('main texture', False, flags)
+    imgui.set_next_window_position(*mImageWindowInnerPos)
+    imgui.set_next_window_size(38,100)
+    flags = imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_COLLAPSE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE
+    expanded, _ = imgui.begin('main texture subwindow', False, flags)
     mHoveringMainTextureSubWindow = is_hovering_window()
-    StyleManager.instance.display_style.show_imgui_style_editor(
-        road_style_change_callback=GraphicManager.instance.main_texture.clear_cache,
-        building_style_change_callback=None,
-        region_style_change_callback=None,
-    )
-
+    if imgui.image_button(mIconTextures['paint-fill'], 20, 20):
+        imgui.open_popup('display_style_editor')
+    if imgui.is_item_hovered():
+        imgui.set_tooltip('显示样式设置')
+    if imgui.begin_popup('display_style_editor'):
+        mHoveringMainTextureSubWindow = True
+        StyleManager.instance.display_style.show_imgui_style_editor(
+            road_style_change_callback=GraphicManager.instance.main_texture.clear_road_data,
+            building_style_change_callback=GraphicManager.instance.main_texture.clear_building_data,
+            region_style_change_callback=GraphicManager.instance.main_texture.clear_region_data,
+        )
+        imgui.end_popup()
+    if imgui.image_button(mIconTextures['stack-fill'], 20,20):
+        imgui.open_popup('display_layer_editor')
+    if imgui.is_item_hovered():
+        imgui.set_tooltip('显示图层设置')
+    if imgui.begin_popup('display_layer_editor'):
+        mHoveringMainTextureSubWindow = True
+        GraphicManager.instance.main_texture.show_imgui_display_editor()
+        imgui.end_popup()
     imgui.end()
 
 
@@ -300,8 +317,10 @@ def imgui_home_page():
                                                | |        
                                                |_|       
     """)
-    imgui.text('version:0.1')
-    imgui.text('冯以恒， 武文忻， 邱淑冰')
+    imgui.text('version:2024.1.13')
+    imgui.text('工具作者：冯以恒， 武文忻， 邱淑冰')
+    imgui.text('使用帮助：')
+    imgui.text('请点击geo标签栏')
     imgui.pop_id()
 
 
@@ -384,8 +403,7 @@ def imgui_geo_page():
                 if imgui.begin_tab_item('Road').selected:
                     imgui.text('选择工具')
                     imgui.text('current selected: 0')
-                    imgui_item_selector_component('road level cluster', mRoadGDFCluster['level'])
-                    imgui_item_selector_component('road state cluster', mRoadGDFCluster['state'])
+                    mRoadGDFCluster.show_imgui_cluster_editor_button()
                     imgui.text('详细操作')
                     if imgui.tree_node('创建删除'):
                         imgui.button('add road')
@@ -428,9 +446,7 @@ def imgui_geo_page():
                 if imgui.begin_tab_item('Building').selected:
                     imgui.text('1. 选择工具')
                     imgui.text('current selected: 0')
-                    imgui_item_selector_component('building movable cluster', mBuildingGDFCluster['movable'])
-                    imgui_item_selector_component('building style cluster', mBuildingGDFCluster['style'])
-                    imgui_item_selector_component('building quality cluster', mBuildingGDFCluster['quality'])
+                    mBuildingGDFCluster.show_imgui_cluster_editor_button()
                     imgui.text('2. 详细操作')
                     if imgui.tree_node('创建删除'):
                         imgui.tree_pop()
@@ -448,8 +464,7 @@ def imgui_geo_page():
                 if imgui.begin_tab_item('Region').selected:
                     imgui.text('1. 选择工具')
                     imgui.text('current selected: 0')
-                    imgui_item_selector_component('region accessible cluster', mRegionGDFCluster['accessible'])
-                    imgui_item_selector_component('region type cluster', mRegionGDFCluster['region_type'])
+                    mRegionGDFCluster.show_imgui_cluster_editor_button()
                     imgui.text('2. 详细操作')
                     if imgui.tree_node('创建删除'):
                         imgui.tree_pop()
@@ -491,46 +506,13 @@ def imgui_geo_page():
         expanded, visible = imgui.collapsing_header('使用cluster绘图', True, imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
             if imgui.button('plot roads by cluster'):
-                uid_sets_by_attr = []
-                cluster = mRoadGDFCluster
-                for attr in cluster:
-                    gdfs = []
-                    for key in cluster[attr]:
-                        if cluster[attr][key]:
-                            _gdfs = Road.get_roads_by_attr_and_value(attr, key)
-                            gdfs.append(_gdfs)
-                    gdf = pd.concat(gdfs, ignore_index=False)
-                    uid_sets_by_attr.append(set(gdf.index))
-                common_uid = list(set.intersection(*uid_sets_by_attr))
-                GraphicManager.instance.plot_to('roads', Road.get_all_roads().loc[common_uid])
+                GraphicManager.instance.plot_to('roads', Road.get_roads_by_cluster(mRoadGDFCluster))
 
             if imgui.button('plot buildings by cluster'):
-                uid_sets_by_attr = []
-                cluster = mBuildingGDFCluster
-                for attr in cluster:
-                    gdfs = []
-                    for key in cluster[attr]:
-                        if cluster[attr][key]:
-                            _gdfs = Building.get_buildings_by_attr_and_value(attr, key)
-                            gdfs.append(_gdfs)
-                    gdf = pd.concat(gdfs, ignore_index=False)
-                    uid_sets_by_attr.append(set(gdf.index))
-                common_uid = list(set.intersection(*uid_sets_by_attr))
-                GraphicManager.instance.plot_to('buildings', Building.get_all_buildings().loc[common_uid])
+                GraphicManager.instance.plot_to('buildings', Building.get_buildings_by_cluster(mBuildingGDFCluster))
 
             if imgui.button('plot regions by cluster'):
-                uid_sets_by_attr = []
-                cluster = mRegionGDFCluster
-                for attr in cluster:
-                    gdfs = []
-                    for key in cluster[attr]:
-                        if cluster[attr][key]:
-                            _gdfs = Region.get_regions_by_attr_and_value(attr, key)
-                            gdfs.append(_gdfs)
-                    gdf = pd.concat(gdfs, ignore_index=False)
-                    uid_sets_by_attr.append(set(gdf.index))
-                common_uid = list(set.intersection(*uid_sets_by_attr))
-                GraphicManager.instance.plot_to('regions', Region.get_all_regions().loc[common_uid])
+                GraphicManager.instance.plot_to('regions', Region.get_regions_by_cluster(mRegionGDFCluster))
 
         expanded, visible = imgui.collapsing_header('其他', True, imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
@@ -610,13 +592,6 @@ def imgui_dict_viewer_treenode_component(target_dict, dict_name, key_name, value
         imgui.tree_pop()
 
 
-def imgui_item_selector_component(label, dict):
-    if imgui.button(label):
-        imgui.open_popup(f'{label} selector')
-    if imgui.begin_popup(f'{label} selector'):
-        for key in dict:
-            opened, dict[key] = imgui.selectable(str(key), dict[key])
-        imgui.end_popup()
 
 
 def imgui_popup_modal_input_ok_cancel_component(id, button_label, title, content, ok_callback):
@@ -680,14 +655,27 @@ def imgui_end_spinner(name):
     mSpinThread.pop(name)
 
 
-def imgui_init_spinner():
+def imgui_init_spinner(light=True):
     global mSpinImageArray
+
+    sub_folder = 'light' if light else 'dark'
     mSpinImageArray = []
-    original_image = Image.open("../textures/spinner_light.png")
+    original_image = Image.open(f"../textures/{sub_folder}/spinner.png")
     # 对图像进行旋转操作
     for i in range(SPIN_ANI_FRAME):
         rotated_image = original_image.rotate(360 / SPIN_ANI_FRAME * i, expand=False, fillcolor=(0, 0, 0, 0))
         mSpinImageArray.append(np.array(rotated_image))
+
+def imgui_init_icons(light=True):
+    sub_folder = 'light' if light else 'dark'
+    for foldername, subfolders, filenames in os.walk(rf"../textures/{sub_folder}/"):
+        for filename in filenames:
+            file_path = os.path.join(foldername, filename)
+            img = Image.open(file_path)
+            img_array = np.array(img)
+            texture_id = graphic_module.create_texture_from_array(img_array)
+            file_name, file_extension = os.path.splitext(filename)
+            mIconTextures[file_name] = texture_id
 
 
 def update_main_graphic():
@@ -739,6 +727,7 @@ if __name__ == "__main__":
         "../fonts/Unifont.ttf", font_size_in_pixels * font_scaling_factor,
         glyph_ranges=io.fonts.get_glyph_ranges_chinese_full()
     )
+
     io.font_global_scale /= font_scaling_factor
     impl.refresh_font_texture()
     imgui.style_colors_dark()
@@ -756,7 +745,9 @@ if __name__ == "__main__":
     imgui.push_style_var(imgui.STYLE_WINDOW_ROUNDING, 8)
     imgui.push_style_var(imgui.STYLE_FRAME_ROUNDING, 4)
 
-    imgui_init_spinner()
+    imgui_init_spinner(light=True)
+    imgui_init_icons(light=True)
+    print(mIconTextures)
     graphic_manager = GraphicManager()
 
     lst_time = time.time()
