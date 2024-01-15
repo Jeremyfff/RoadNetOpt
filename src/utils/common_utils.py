@@ -96,7 +96,7 @@ def duplicate_filter(logger):
 
 def imgui_item_selector_component(label, dict):
     any_clicked = False
-    if imgui.button(label):
+    if imgui.button(label, width=200):
         imgui.open_popup(f'{label} selector')
     if imgui.begin_popup(f'{label} selector'):
         for key in dict:

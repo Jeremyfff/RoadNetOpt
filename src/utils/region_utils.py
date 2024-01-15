@@ -23,6 +23,6 @@ class RegionCluster:
 
     def show_imgui_cluster_editor_button(self):
         any_change = False
-        any_change |= imgui_item_selector_component('region accessible cluster', self.cluster['accessible'])
-        any_change |= imgui_item_selector_component('region type cluster', self.cluster['region_type'])
+        any_change |= imgui_item_selector_component('accessible cluster >', self.cluster['accessible'])
+        any_change |= imgui_item_selector_component('region type cluster >', self.cluster['region_type'])
         return any_change

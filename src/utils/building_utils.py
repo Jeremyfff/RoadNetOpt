@@ -32,7 +32,7 @@ class BuildingCluster:
 
     def show_imgui_cluster_editor_button(self):
         any_change = False
-        any_change |= imgui_item_selector_component('building movable cluster', self.cluster['movable'])
-        any_change |= imgui_item_selector_component('building style cluster', self.cluster['style'])
-        any_change |= imgui_item_selector_component('building quality cluster', self.cluster['quality'])
+        any_change |= imgui_item_selector_component('movable cluster >', self.cluster['movable'])
+        any_change |= imgui_item_selector_component('style cluster >', self.cluster['style'])
+        any_change |= imgui_item_selector_component('quality cluster >', self.cluster['quality'])
         return any_change

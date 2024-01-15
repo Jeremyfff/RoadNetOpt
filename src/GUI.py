@@ -1,7 +1,10 @@
+
+
 import os
 import time
+
+start_time = time.time()
 import imgui
-import pandas as pd
 import pygame
 from PIL import Image
 from imgui.integrations.pygame import PygameRenderer
@@ -9,19 +12,26 @@ import OpenGL.GL as gl
 from OpenGL.GL import *
 import threading
 import sys
-import numpy as np
+from utils.common_utils import timer
 
+import numpy as np
+import osmnx as ox
 import graphic_module
-from graphic_module import GraphicManager, create_texture_from_array, update_texture
+from graphic_module import GraphicManager
 from geo import Road, Building, Region
+
 from utils import io_utils
+from utils import graphic_uitls
 from utils import RoadLevel, RoadState, BuildingMovableType, BuildingStyle, BuildingQuality, RegionAccessibleType, \
     RegionType, RoadCluster, BuildingCluster, RegionCluster
+
+from gui.icon_module import IconManager, Spinner
+
 from pympler.asizeof import asizeof
 from style_module import StyleManager, StyleScheme
 import ctypes
 # ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
-
+print(f'import完成，耗时{time.time() - start_time}s')
 """
 * Powered by DearImGui
 * Online Manual - https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
@@ -49,15 +59,25 @@ mHoveringMainTextureSubWindow = False
 
 mSelectedRoads = {}  # 被选中的道路 dict{uid:road}
 
-mDxfPath = r'D:/M.Arch/2024Spr/RoadNetworkOptimization/RoadNetOpt/data/和县/simplified_data.dxf'
+mDxfPath = r'../data/和县/simplified_data.dxf'
 mLoadDxfNextFrame = False
 mDxfDoc = None
 mDxfLayers = None
 
-mDataPath = 'D:/M.Arch/2024Spr/RoadNetworkOptimization/RoadNetOpt/data/和县/simplified_data.bin'
+mDataPath = '../data/和县/simplified_data.bin'
 mData = None
 mDataSize = 0
 mConstEmptyData = {'version': 'N/A', 'roads': 'N/A', 'buildings': 'N/A', 'regions': 'N/A', 'height': 'N/A'}
+
+mOSMNorth = 37.79
+mOSMSouth = 37.78
+mOSMEast = -122.41
+mOSMWest = -122.43
+
+mOSMNetworkTypes = ["all_private", "all", "bike", "drive", "drive_service", "walk"]
+mOSMCurrentNetworkType = "drive"
+
+mOSMGraph = None
 
 mGDFInfo = {}
 mGraphicCacheInfo = {}
@@ -79,7 +99,7 @@ mShowHelpInfo = True
 mFrameTime = 0
 mFirstLoop = True
 
-mIconTextures = {}
+
 
 def imgui_main_window():
     global lst_time, mDxfWindowOpened
@@ -186,7 +206,7 @@ def imgui_main_texture_subwindow():
     flags = imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_COLLAPSE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE
     expanded, _ = imgui.begin('main texture subwindow', False, flags)
     mHoveringMainTextureSubWindow = is_hovering_window()
-    if imgui.image_button(mIconTextures['paint-fill'], 20, 20):
+    if imgui.image_button(IconManager.instance.icons['paint-fill'], 20, 20):
         imgui.open_popup('display_style_editor')
     if imgui.is_item_hovered():
         imgui.set_tooltip('显示样式设置')
@@ -198,7 +218,7 @@ def imgui_main_texture_subwindow():
             region_style_change_callback=GraphicManager.instance.main_texture.clear_region_data,
         )
         imgui.end_popup()
-    if imgui.image_button(mIconTextures['stack-fill'], 20,20):
+    if imgui.image_button(IconManager.instance.icons['stack-fill'], 20,20):
         imgui.open_popup('display_layer_editor')
     if imgui.is_item_hovered():
         imgui.set_tooltip('显示图层设置')
@@ -332,6 +352,7 @@ def _load_data():
 
 def imgui_geo_page():
     global mDxfWindowOpened, mDataPath, mData, mDataSize
+    global mOSMNorth, mOSMSouth, mOSMEast, mOSMWest, mOSMGraph
     imgui.push_id('geo_page')
 
     if imgui.tree_node('[1] DXF工具'):
@@ -340,7 +361,7 @@ def imgui_geo_page():
         if imgui.is_item_hovered():
             imgui.set_tooltip('dxf转换工具能够将dxf文件的内容转换为本软件所需的二进制文件交换格式')
         imgui.tree_pop()
-    if imgui.tree_node('[2] 几何体工具', imgui.TREE_NODE_DEFAULT_OPEN):
+    if imgui.tree_node('[2] 数据加载工具', imgui.TREE_NODE_DEFAULT_OPEN):
 
         expanded, visible = imgui.collapsing_header('[2.1] data->GDFs', True, imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
@@ -355,8 +376,9 @@ def imgui_geo_page():
             if imgui.button('...'):
                 mDataPath = io_utils.open_file_window()
             if imgui.button('load data'):
-                imgui_start_spinner('load_data', target=_load_data, args=())
-            imgui_spinner('load_data')
+
+                Spinner.start('load_data', target=_load_data, args=())
+            Spinner.spinner('load_data')
             if imgui.is_item_hovered():
                 imgui.set_tooltip('将二进制data加载到内存中')
             imgui.same_line()
@@ -379,23 +401,38 @@ def imgui_geo_page():
                 imgui.pop_style_color()
             if imgui.button('->Roads', 100):
                 # Road.data_to_roads(mData)
-                imgui_start_spinner('data_to_road', target=Road.data_to_roads, args=(mData,))
-            imgui_spinner('data_to_road')
+                Spinner.start('data_to_road', target=Road.data_to_roads, args=(mData,))
+            Spinner.spinner('data_to_road')
             imgui.same_line()
             if imgui.button('->Buildings', 100):
-                imgui_start_spinner('data_to_building', target=Building.data_to_buildings, args=(mData,))
-            imgui_spinner('data_to_building')
+                Spinner.start('data_to_building', target=Building.data_to_buildings, args=(mData,))
+            Spinner.spinner('data_to_building')
             imgui.same_line()
             if imgui.button('->Regions', 100):
-                imgui_start_spinner('data_to_region', target=Region.data_to_regions, args=(mData,))
-            imgui_spinner('data_to_region')
+                Spinner.start('data_to_region', target=Region.data_to_regions, args=(mData,))
+            Spinner.spinner('data_to_region')
             if imgui.button('->All', 316, 32):
-                imgui_start_spinner('data_to_all', target=lambda _: (
+                Spinner.start('data_to_all', target=lambda _: (
                     Road.data_to_roads(mData), Building.data_to_buildings(mData), Region.data_to_regions(mData)),
                                     args=(0,))
-            imgui_spinner('data_to_all')
+            Spinner.spinner('data_to_all')
 
             imgui.text('')
+        expanded, visible = imgui.collapsing_header('[2.2] osm->GDFs', True)
+        if expanded:
+            _, mOSMNorth = imgui.input_float('north', mOSMNorth)
+            _, mOSMSouth = imgui.input_float('south', mOSMSouth)
+            _, mOSMEast = imgui.input_float('east', mOSMEast)
+            _, mOSMWest = imgui.input_float('west', mOSMWest)
+            if imgui.button('download'):
+                Spinner.start('download_osm', target=
+                lambda _:(
+                    Road.from_graph(ox.graph_from_bbox(mOSMNorth, mOSMSouth, mOSMEast, mOSMWest, network_type='drive')),
+                    GraphicManager.instance.main_texture.clear_x_y_lim()
+                          ), args=(0,))
+            Spinner.spinner('download_osm')
+        imgui.tree_pop()
+    if imgui.tree_node('[3] GDF操作工具', imgui.TREE_NODE_DEFAULT_OPEN):
 
         expanded, visible = imgui.collapsing_header('[2.2] GDFs操作', True, imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
@@ -592,8 +629,6 @@ def imgui_dict_viewer_treenode_component(target_dict, dict_name, key_name, value
         imgui.tree_pop()
 
 
-
-
 def imgui_popup_modal_input_ok_cancel_component(id, button_label, title, content, ok_callback):
     global mTmpPopupInputValue
     imgui.push_id(f'{id}')
@@ -614,68 +649,8 @@ def imgui_popup_modal_input_ok_cancel_component(id, button_label, title, content
     imgui.pop_id()
 
 
-mSpinImageArray = []
-mSpinStartTime = {}
-mSpinLastIdx = {}
-mSpinTextureId = {}
-mSpinThread = {}
-SPIN_ANI_FRAME = 40  # frame per sec
-SPIN_TIME = 1  # sec
 
 
-def imgui_spinner(name, width=20, height=20):
-    if name not in mSpinStartTime:
-        return
-    if not mSpinThread[name].is_alive():
-        imgui_end_spinner(name)
-        return
-    start_time = mSpinStartTime[name]
-    t = (time.time() - start_time) % SPIN_TIME / SPIN_TIME
-    idx = int(t * SPIN_ANI_FRAME)
-    if idx != mSpinLastIdx[name]:
-        update_texture(mSpinTextureId[name], mSpinImageArray[idx])
-        mSpinLastIdx[name] = idx
-    imgui.same_line()
-    imgui.image(mSpinTextureId[name], width, height)
-
-
-def imgui_start_spinner(name, target, args):
-    mSpinStartTime[name] = time.time()
-    mSpinLastIdx[name] = 0
-    mSpinTextureId[name] = create_texture_from_array(mSpinImageArray[0])
-    thread = threading.Thread(target=target, args=args)
-    mSpinThread[name] = thread
-    thread.start()
-
-
-def imgui_end_spinner(name):
-    mSpinStartTime.pop(name)
-    mSpinLastIdx.pop(name)
-    mSpinTextureId.pop(name)
-    mSpinThread.pop(name)
-
-
-def imgui_init_spinner(light=True):
-    global mSpinImageArray
-
-    sub_folder = 'light' if light else 'dark'
-    mSpinImageArray = []
-    original_image = Image.open(f"../textures/{sub_folder}/spinner.png")
-    # 对图像进行旋转操作
-    for i in range(SPIN_ANI_FRAME):
-        rotated_image = original_image.rotate(360 / SPIN_ANI_FRAME * i, expand=False, fillcolor=(0, 0, 0, 0))
-        mSpinImageArray.append(np.array(rotated_image))
-
-def imgui_init_icons(light=True):
-    sub_folder = 'light' if light else 'dark'
-    for foldername, subfolders, filenames in os.walk(rf"../textures/{sub_folder}/"):
-        for filename in filenames:
-            file_path = os.path.join(foldername, filename)
-            img = Image.open(file_path)
-            img_array = np.array(img)
-            texture_id = graphic_module.create_texture_from_array(img_array)
-            file_name, file_extension = os.path.splitext(filename)
-            mIconTextures[file_name] = texture_id
 
 
 def update_main_graphic():
@@ -711,6 +686,9 @@ def is_hovering_window():
     return imgui.is_mouse_hovering_rect(_min[0], _min[1], _max[0], _max[1])
 
 
+def init():
+    pass
+
 if __name__ == "__main__":
     pygame.init()
     size = (1920, 1080)
@@ -719,6 +697,10 @@ if __name__ == "__main__":
 
     imgui.create_context()
     impl = PygameRenderer()
+
+
+
+
     io = imgui.get_io()
     io.display_size = size
     font_scaling_factor = 1
@@ -745,10 +727,10 @@ if __name__ == "__main__":
     imgui.push_style_var(imgui.STYLE_WINDOW_ROUNDING, 8)
     imgui.push_style_var(imgui.STYLE_FRAME_ROUNDING, 4)
 
-    imgui_init_spinner(light=True)
-    imgui_init_icons(light=True)
-    print(mIconTextures)
+
     graphic_manager = GraphicManager()
+    icon_manager = IconManager()
+    Spinner.init(True)
 
     lst_time = time.time()
     while True:

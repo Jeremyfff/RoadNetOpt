@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 from geo import Road, Building, Region, Object
-from graphic_module import plot_as_array, plot_as_array2
+from graphic_module import plot_as_array
 from utils import point_utils, image_utils, road_utils, io_utils
 from utils import RoadState, RoadLevel
 from optimize_module import RoadOptimizer
