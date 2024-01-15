@@ -15,6 +15,7 @@ import sys
 from utils.common_utils import timer
 
 import numpy as np
+import osmnx as ox
 import graphic_module
 from graphic_module import GraphicManager
 from geo import Road, Building, Region
@@ -58,15 +59,25 @@ mHoveringMainTextureSubWindow = False
 
 mSelectedRoads = {}  # 被选中的道路 dict{uid:road}
 
-mDxfPath = r'D:/M.Arch/2024Spr/RoadNetworkOptimization/RoadNetOpt/data/和县/simplified_data.dxf'
+mDxfPath = r'../data/和县/simplified_data.dxf'
 mLoadDxfNextFrame = False
 mDxfDoc = None
 mDxfLayers = None
 
-mDataPath = 'D:/M.Arch/2024Spr/RoadNetworkOptimization/RoadNetOpt/data/和县/simplified_data.bin'
+mDataPath = '../data/和县/simplified_data.bin'
 mData = None
 mDataSize = 0
 mConstEmptyData = {'version': 'N/A', 'roads': 'N/A', 'buildings': 'N/A', 'regions': 'N/A', 'height': 'N/A'}
+
+mOSMNorth = 37.79
+mOSMSouth = 37.78
+mOSMEast = -122.41
+mOSMWest = -122.43
+
+mOSMNetworkTypes = ["all_private", "all", "bike", "drive", "drive_service", "walk"]
+mOSMCurrentNetworkType = "drive"
+
+mOSMGraph = None
 
 mGDFInfo = {}
 mGraphicCacheInfo = {}
@@ -341,6 +352,7 @@ def _load_data():
 
 def imgui_geo_page():
     global mDxfWindowOpened, mDataPath, mData, mDataSize
+    global mOSMNorth, mOSMSouth, mOSMEast, mOSMWest, mOSMGraph
     imgui.push_id('geo_page')
 
     if imgui.tree_node('[1] DXF工具'):
@@ -349,7 +361,7 @@ def imgui_geo_page():
         if imgui.is_item_hovered():
             imgui.set_tooltip('dxf转换工具能够将dxf文件的内容转换为本软件所需的二进制文件交换格式')
         imgui.tree_pop()
-    if imgui.tree_node('[2] 几何体工具', imgui.TREE_NODE_DEFAULT_OPEN):
+    if imgui.tree_node('[2] 数据加载工具', imgui.TREE_NODE_DEFAULT_OPEN):
 
         expanded, visible = imgui.collapsing_header('[2.1] data->GDFs', True, imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
@@ -406,6 +418,21 @@ def imgui_geo_page():
             Spinner.spinner('data_to_all')
 
             imgui.text('')
+        expanded, visible = imgui.collapsing_header('[2.2] osm->GDFs', True)
+        if expanded:
+            _, mOSMNorth = imgui.input_float('north', mOSMNorth)
+            _, mOSMSouth = imgui.input_float('south', mOSMSouth)
+            _, mOSMEast = imgui.input_float('east', mOSMEast)
+            _, mOSMWest = imgui.input_float('west', mOSMWest)
+            if imgui.button('download'):
+                Spinner.start('download_osm', target=
+                lambda _:(
+                    Road.from_graph(ox.graph_from_bbox(mOSMNorth, mOSMSouth, mOSMEast, mOSMWest, network_type='drive')),
+                    GraphicManager.instance.main_texture.clear_x_y_lim()
+                          ), args=(0,))
+            Spinner.spinner('download_osm')
+        imgui.tree_pop()
+    if imgui.tree_node('[3] GDF操作工具', imgui.TREE_NODE_DEFAULT_OPEN):
 
         expanded, visible = imgui.collapsing_header('[2.2] GDFs操作', True, imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
@@ -600,8 +627,6 @@ def imgui_dict_viewer_treenode_component(target_dict, dict_name, key_name, value
     if imgui.tree_node(dict_name, flags=imgui.TREE_NODE_DEFAULT_OPEN):
         imgui_dict_viewer_component(target_dict, dict_name, key_name, value_name, value_op)
         imgui.tree_pop()
-
-
 
 
 def imgui_popup_modal_input_ok_cancel_component(id, button_label, title, content, ok_callback):

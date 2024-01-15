@@ -329,6 +329,8 @@ class MainGraphTexture(GraphicTexture):
         self.cached_highlighted_road_data = None
         self.cached_building_data = None
         self.cached_region_data = None
+        self.x_lim = None
+        self.y_lim = None
 
     def clear_highlight_data(self):
         self.cached_highlighted_road_data = None
@@ -349,7 +351,9 @@ class MainGraphTexture(GraphicTexture):
     def clear_region_data(self):
         self.cached_region_data = None
 
-
+    def clear_x_y_lim(self):
+        self.x_lim = None
+        self.y_lim = None
 class GraphicManager:
     instance: 'GraphicManager' = None
 

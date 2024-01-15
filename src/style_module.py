@@ -402,3 +402,4 @@ class StyleManager:
 
 
 style_manager = StyleManager()
+
