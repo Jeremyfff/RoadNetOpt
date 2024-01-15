@@ -285,13 +285,13 @@ class MainGraphTexture(GraphicTexture):
     def update(self, **kwargs):
         if Road.get_all_roads().empty:
             return
-        window_size = kwargs['window_size']
+        target_size = kwargs['target_size']
         selected_roads = kwargs['selected_roads']
-        window_width, window_height = window_size[0], window_size[1]
-        if window_width != self.width or window_height != self.height:
-            self.update_size(window_width, window_height)
+        target_width, target_height = target_size[0], target_size[1]
+        if target_width != self.width or target_height != self.height:
+            self.update_size(target_width, target_height)
             self.clear_cache()
-            print(f'[update] window size changed to {window_width}, {window_height}')
+            print(f'[update] target size changed to {target_width}, {target_height}')
             print(f'[update] self.size updated to {self.width}, {self.height}')
             print(f'[update] return')
             return

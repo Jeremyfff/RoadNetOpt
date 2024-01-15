@@ -8,7 +8,7 @@ from PIL import Image
 import os
 import numpy as np
 from utils import graphic_uitls
-
+from gui.global_var import *
 
 class IconManager:
     instance: 'IconManager' = None
@@ -35,10 +35,11 @@ class IconManager:
     def set_mode(self, light):
         self._init_icons(light)
 
-    def imgui_icon(self, name, width=20, height=20):
-        if name not in self.icons:
+    @staticmethod
+    def imgui_icon(name, width=20, height=20):
+        if name not in IconManager.instance.icons.keys():
             return
-        imgui.image(self.icons[name], width, height)
+        imgui.image(IconManager.instance.icons[name], width, height)
 
 
 
@@ -82,7 +83,7 @@ class Spinner:
             graphic_uitls.update_texture(Spinner.mSpinTextureId[name], Spinner.mSpinImageArray[idx])
             Spinner.mSpinLastIdx[name] = idx
         imgui.same_line()
-        imgui.image(Spinner.mSpinTextureId[name], width, height)
+        imgui.image(Spinner.mSpinTextureId[name], width*GLOBAL_SCALE, height*GLOBAL_SCALE)
     @staticmethod
     def start(name, target, args):
         Spinner.mSpinStartTime[name] = time.time()
