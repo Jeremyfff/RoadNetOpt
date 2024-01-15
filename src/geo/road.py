@@ -44,6 +44,12 @@ class Road(Object):
 
     _flag_cached_graph_need_update = False
     __uid = uuid.uuid4()
+<<<<<<< HEAD
+=======
+    @staticmethod
+    def uid():
+        return Road.__uid
+>>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
 
     # region 节点相关
     @staticmethod

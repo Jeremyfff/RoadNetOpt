@@ -87,6 +87,21 @@ def duplicate_filter(logger):
     return decorator
 
 
+<<<<<<< HEAD
+=======
+def imgui_item_selector_component(label, dict):
+    any_clicked = False
+    if imgui.button(label, width=200):
+        imgui.open_popup(f'{label} selector')
+    if imgui.begin_popup(f'{label} selector'):
+        for key in dict:
+            clicked, dict[key] = imgui.checkbox(str(key), dict[key])
+            any_clicked |= clicked
+        imgui.end_popup()
+    return any_clicked
+
+
+>>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
 if __name__ == '__main__':
     # 创建 logger 对象
     logger = logging.getLogger()

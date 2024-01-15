@@ -38,3 +38,20 @@ def highway_to_level(highway):
         return RoadLevel.ALLEY
     else:
         return RoadLevel.CUSTOM
+<<<<<<< HEAD
+=======
+
+
+
+
+
+class RoadCluster:
+    def __init__(self):
+        self.cluster = {'level': {key: True for key in RoadLevel}, 'state': {key: True for key in RoadState}}
+
+    def show_imgui_cluster_editor_button(self):
+        any_change = False
+        any_change |= imgui_item_selector_component('level cluster >', self.cluster['level'])
+        any_change |= imgui_item_selector_component('state cluster >', self.cluster['state'])
+        return any_change
+>>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)

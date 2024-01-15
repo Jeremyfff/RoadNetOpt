@@ -1,6 +1,13 @@
+<<<<<<< HEAD
+=======
+
+
+import os
+>>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
 import time
+
+start_time = time.time()
 import imgui
-import pandas as pd
 import pygame
 from PIL import Image
 from imgui.integrations.pygame import PygameRenderer
@@ -8,17 +15,34 @@ import OpenGL.GL as gl
 from OpenGL.GL import *
 import threading
 import sys
+<<<<<<< HEAD
 import numpy as np
 from graphic_module import GraphicManager, create_texture_from_array, update_texture
+=======
+from utils.common_utils import timer
+
+import numpy as np
+import graphic_module
+from graphic_module import GraphicManager
+>>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
 from geo import Road, Building, Region
+
 from utils import io_utils
+from utils import graphic_uitls
 from utils import RoadLevel, RoadState, BuildingMovableType, BuildingStyle, BuildingQuality, RegionAccessibleType, \
+<<<<<<< HEAD
     RegionType
+=======
+    RegionType, RoadCluster, BuildingCluster, RegionCluster
+
+from gui.icon_module import IconManager, Spinner
+
+>>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
 from pympler.asizeof import asizeof
 from style_module import StyleManager, PlotStyle
 import ctypes
 # ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
-
+print(f'import完成，耗时{time.time() - start_time}s')
 """
 * Powered by DearImGui
 * Online Manual - https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
@@ -77,6 +101,10 @@ mShowHelpInfo = True
 mFrameTime = 0
 mFirstLoop = True
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
 
 def imgui_main_window():
     global lst_time, mDxfWindowOpened
@@ -183,12 +211,35 @@ def imgui_main_texture_subwindow():
     flags = imgui.WINDOW_NO_TITLE_BAR
     expanded, _ = imgui.begin('main texture', False, flags)
     mHoveringMainTextureSubWindow = is_hovering_window()
+<<<<<<< HEAD
     StyleManager.instance.display_style.show_imgui_style_editor(
         road_style_change_callback=GraphicManager.instance.main_texture.clear_cache,
         building_style_change_callback=None,
         region_style_change_callback=None,
     )
 
+=======
+    if imgui.image_button(IconManager.instance.icons['paint-fill'], 20, 20):
+        imgui.open_popup('display_style_editor')
+    if imgui.is_item_hovered():
+        imgui.set_tooltip('显示样式设置')
+    if imgui.begin_popup('display_style_editor'):
+        mHoveringMainTextureSubWindow = True
+        StyleManager.instance.display_style.show_imgui_style_editor(
+            road_style_change_callback=GraphicManager.instance.main_texture.clear_road_data,
+            building_style_change_callback=GraphicManager.instance.main_texture.clear_building_data,
+            region_style_change_callback=GraphicManager.instance.main_texture.clear_region_data,
+        )
+        imgui.end_popup()
+    if imgui.image_button(IconManager.instance.icons['stack-fill'], 20,20):
+        imgui.open_popup('display_layer_editor')
+    if imgui.is_item_hovered():
+        imgui.set_tooltip('显示图层设置')
+    if imgui.begin_popup('display_layer_editor'):
+        mHoveringMainTextureSubWindow = True
+        GraphicManager.instance.main_texture.show_imgui_display_editor()
+        imgui.end_popup()
+>>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
     imgui.end()
 
 
@@ -336,8 +387,9 @@ def imgui_geo_page():
             if imgui.button('...'):
                 mDataPath = io_utils.open_file_window()
             if imgui.button('load data'):
-                imgui_start_spinner('load_data', target=_load_data, args=())
-            imgui_spinner('load_data')
+
+                Spinner.start('load_data', target=_load_data, args=())
+            Spinner.spinner('load_data')
             if imgui.is_item_hovered():
                 imgui.set_tooltip('将二进制data加载到内存中')
             imgui.same_line()
@@ -360,21 +412,21 @@ def imgui_geo_page():
                 imgui.pop_style_color()
             if imgui.button('->Roads', 100):
                 # Road.data_to_roads(mData)
-                imgui_start_spinner('data_to_road', target=Road.data_to_roads, args=(mData,))
-            imgui_spinner('data_to_road')
+                Spinner.start('data_to_road', target=Road.data_to_roads, args=(mData,))
+            Spinner.spinner('data_to_road')
             imgui.same_line()
             if imgui.button('->Buildings', 100):
-                imgui_start_spinner('data_to_building', target=Building.data_to_buildings, args=(mData,))
-            imgui_spinner('data_to_building')
+                Spinner.start('data_to_building', target=Building.data_to_buildings, args=(mData,))
+            Spinner.spinner('data_to_building')
             imgui.same_line()
             if imgui.button('->Regions', 100):
-                imgui_start_spinner('data_to_region', target=Region.data_to_regions, args=(mData,))
-            imgui_spinner('data_to_region')
+                Spinner.start('data_to_region', target=Region.data_to_regions, args=(mData,))
+            Spinner.spinner('data_to_region')
             if imgui.button('->All', 316, 32):
-                imgui_start_spinner('data_to_all', target=lambda _: (
+                Spinner.start('data_to_all', target=lambda _: (
                     Road.data_to_roads(mData), Building.data_to_buildings(mData), Region.data_to_regions(mData)),
                                     args=(0,))
-            imgui_spinner('data_to_all')
+            Spinner.spinner('data_to_all')
 
             imgui.text('')
 
@@ -639,15 +691,9 @@ def imgui_popup_modal_input_ok_cancel_component(id, button_label, title, content
     imgui.pop_id()
 
 
-mSpinImageArray = []
-mSpinStartTime = {}
-mSpinLastIdx = {}
-mSpinTextureId = {}
-mSpinThread = {}
-SPIN_ANI_FRAME = 40  # frame per sec
-SPIN_TIME = 1  # sec
 
 
+<<<<<<< HEAD
 def imgui_spinner(name, width=20, height=20):
     if name not in mSpinStartTime:
         return
@@ -688,6 +734,8 @@ def imgui_init_spinner():
     for i in range(SPIN_ANI_FRAME):
         rotated_image = original_image.rotate(360 / SPIN_ANI_FRAME * i, expand=False, fillcolor=(0, 0, 0, 0))
         mSpinImageArray.append(np.array(rotated_image))
+=======
+>>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
 
 
 def update_main_graphic():
@@ -723,6 +771,9 @@ def is_hovering_window():
     return imgui.is_mouse_hovering_rect(_min[0], _min[1], _max[0], _max[1])
 
 
+def init():
+    pass
+
 if __name__ == "__main__":
     pygame.init()
     size = (1920, 1080)
@@ -731,6 +782,10 @@ if __name__ == "__main__":
 
     imgui.create_context()
     impl = PygameRenderer()
+
+
+
+
     io = imgui.get_io()
     io.display_size = size
     font_scaling_factor = 1
@@ -756,8 +811,14 @@ if __name__ == "__main__":
     imgui.push_style_var(imgui.STYLE_WINDOW_ROUNDING, 8)
     imgui.push_style_var(imgui.STYLE_FRAME_ROUNDING, 4)
 
+<<<<<<< HEAD
     imgui_init_spinner()
+=======
+
+>>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
     graphic_manager = GraphicManager()
+    icon_manager = IconManager()
+    Spinner.init(True)
 
     lst_time = time.time()
     while True:
