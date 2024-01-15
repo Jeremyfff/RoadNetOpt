@@ -102,14 +102,18 @@ class RoadNet:
         y_move = np.reshape(np.sin(i[:, 0]) * i[:, 1], (-1, 1))
         move = np.concatenate((x_move, y_move), axis=1)
         self.last_points = points + move
-        reward = self.reward()
+        # 给每条路添加新的 最末点， 以此使路网生长
         for i in range(0, self.nb_new_roads):
             agent_road = Road.get_all_roads().iloc[i-3]
-            my_road = Road.add_point_to_road(agent_road, point=self.last_points[i].reshape((1,2)))
-
+            my_road = Road.add_point_to_road(agent_road, point=self.last_points[i].reshape((1, 2)))
+        # 返回下一时刻状态
+        new_observation = self.return_image_observation()
+        # 根据下一时刻状态，判断该动作下获得的奖励
+        reward = self.reward()
+        # 判断路网生长是否结束
         done = self.done()
         Done = self.Done(done)
-        new_observation = self.return_image_observation()
+
 
         if self.if_render:
             self.render()
@@ -201,6 +205,7 @@ for e in range(10):
     print(Done)
     if Done:
         break
+    print(f'现在是第 {A.episode_step} 轮')
 end = time.perf_counter()
 
 # print(A.road_start_len)
