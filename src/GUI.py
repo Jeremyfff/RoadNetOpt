@@ -30,16 +30,24 @@ from gui.icon_module import IconManager, Spinner
 from pympler.asizeof import asizeof
 from style_module import StyleManager, StyleScheme
 import ctypes
-# ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
+ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 print(f'import完成，耗时{time.time() - start_time}s')
 """
 * Powered by DearImGui
 * Online Manual - https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
 """
 
+GLOBAL_SCALE = 1.5
 
-LEFT_WINDOW_WIDTH = 400
-BOTTOM_WINDOW_HEIGHT = 32
+INIT_WINDOW_WIDTH = 1920 * GLOBAL_SCALE
+INIT_WINDOW_HEIGHT = 1080 * GLOBAL_SCALE
+LEFT_WINDOW_WIDTH = 400 * GLOBAL_SCALE
+BOTTOM_WINDOW_HEIGHT = 32 * GLOBAL_SCALE
+FONT_SIZE = 16 * GLOBAL_SCALE
+FONT_SCALING_FACTOR = 1
+DEFAULT_IMAGE_BUTTON_WIDTH = 20 * GLOBAL_SCALE
+DEFAULT_IMAGE_BUTTON_HEIGHT = 20 * GLOBAL_SCALE
+
 
 mDxfWindowOpened = False
 mInfoWindowOpened = True
@@ -99,8 +107,6 @@ mShowHelpInfo = True
 mFrameTime = 0
 mFirstLoop = True
 
-
-
 def imgui_main_window():
     global lst_time, mDxfWindowOpened
     screen_width, screen_height = pygame.display.get_window_size()
@@ -156,7 +162,7 @@ def imgui_image_window():
             if selected:
                 imgui.image(texture.texture_id, texture.width, texture.height)
                 if texture.name == 'main':
-                    imgui_main_texture_subwindow()
+                    imgui_main_texture_toolbox_subwindow()
                 mTextureInfo['last updated'] = str(texture.last_update_time)
                 mTextureInfo['texture size'] = f"{texture.width} , {texture.height}"
                 mTextureInfo['x_lim'] = str(texture.x_lim)
@@ -198,8 +204,9 @@ def imgui_bottom_window():
     imgui.end()
 
 
-def imgui_main_texture_subwindow():
+def imgui_main_texture_toolbox_subwindow():
     global mCurrentRoadDisplayOption, mCurrentBuildingDisplayOption, mCurrentRegionDisplayOption, mHoveringMainTextureSubWindow
+    tool_set_button_num = 3
 
     imgui.set_next_window_position(*mImageWindowInnerPos)
     imgui.set_next_window_size(38,100)
@@ -691,7 +698,7 @@ def init():
 
 if __name__ == "__main__":
     pygame.init()
-    size = (1920, 1080)
+    size = (INIT_WINDOW_WIDTH, INIT_WINDOW_HEIGHT)
     pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
     pygame.display.set_caption('road net opt window')
 
@@ -703,14 +710,13 @@ if __name__ == "__main__":
 
     io = imgui.get_io()
     io.display_size = size
-    font_scaling_factor = 1
-    font_size_in_pixels = 16
+
     chinese_font = io.fonts.add_font_from_file_ttf(
-        "../fonts/Unifont.ttf", font_size_in_pixels * font_scaling_factor,
+        "../fonts/Unifont.ttf", FONT_SIZE * FONT_SCALING_FACTOR,
         glyph_ranges=io.fonts.get_glyph_ranges_chinese_full()
     )
+    io.font_global_scale /= FONT_SCALING_FACTOR
 
-    io.font_global_scale /= font_scaling_factor
     impl.refresh_font_texture()
     imgui.style_colors_dark()
     imgui.push_style_color(imgui.COLOR_WINDOW_BACKGROUND, 0.10, 0.10, 0.10, 1.00)
