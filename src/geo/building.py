@@ -19,6 +19,12 @@ class Building(Object):
     __building_gdf = gpd.GeoDataFrame(columns=__building_attrs)
     __building_gdf.set_index('uid')
 
+    __uid = uuid.uuid4()
+
+    @staticmethod
+    def uid():
+        return Building.__uid
+
     # region 增加删除
     @staticmethod
     def _create_building_by_coords(coords: np.ndarray,
@@ -89,6 +95,7 @@ class Building(Object):
             Building.__building_gdf = gpd.pd.concat([Building.__building_gdf, building], ignore_index=False)
         else:
             Building.__building_gdf = building
+        Building.__uid = uuid.uuid4()
         return building['uid']
 
     @staticmethod
@@ -97,6 +104,7 @@ class Building(Object):
             Building.__building_gdf = gpd.pd.concat([Building.__building_gdf, buildings], ignore_index=False)
         else:
             Building.__building_gdf = buildings
+        Building.__uid = uuid.uuid4()
         return list(buildings['uid'])
 
     @staticmethod
@@ -155,6 +163,7 @@ class Building(Object):
     def delete_building(building):
         uid = building['uid']
         Building.__building_gdf.drop(uid, inplace=True)
+        Building.__uid = uuid.uuid4()
 
     @staticmethod
     def delete_building_by_uid(uid):
@@ -164,6 +173,7 @@ class Building(Object):
     @staticmethod
     def delete_all():
         Building.__building_gdf.drop(Building.__building_gdf['uid'], inplace=True)
+        Building.__uid = uuid.uuid4()
 
     # endregion
 
@@ -228,8 +238,10 @@ class Building(Object):
     # region 编辑修改
     @staticmethod
     def set_attr_value(buildings, attr, value):
+        # TODO 这个可能有问题
         assert attr in Building.__building_attrs, f'unexpected attr ({attr}), attr must be one of these: {Building.__building_attrs}'
         buildings[attr] = value
+        Building.__uid = uuid.uuid4()
 
     # endregion
 

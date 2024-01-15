@@ -44,7 +44,9 @@ class Road(Object):
 
     _flag_cached_graph_need_update = False
     __uid = uuid.uuid4()
-
+    @staticmethod
+    def uid():
+        return Road.__uid
 
     # region 节点相关
     @staticmethod

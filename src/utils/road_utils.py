@@ -51,6 +51,6 @@ class RoadCluster:
 
     def show_imgui_cluster_editor_button(self):
         any_change = False
-        any_change |= imgui_item_selector_component('road level cluster', self.cluster['level'])
-        any_change |= imgui_item_selector_component('road state cluster', self.cluster['state'])
+        any_change |= imgui_item_selector_component('level cluster >', self.cluster['level'])
+        any_change |= imgui_item_selector_component('state cluster >', self.cluster['state'])
         return any_change

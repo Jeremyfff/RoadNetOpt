@@ -15,6 +15,11 @@ class Region(Object):
     __region_gdf = gpd.GeoDataFrame(columns=__region_attrs)
     __region_gdf.set_index('uid')
 
+    __uid = uuid.uuid4()
+
+    @staticmethod
+    def uid():
+        return Region.__uid
     # region 增加删除
     @staticmethod
     def _create_region_by_coords(coords: np.ndarray,
@@ -77,6 +82,7 @@ class Region(Object):
             Region.__region_gdf = gpd.pd.concat([Region.__region_gdf, region], ignore_index=False)
         else:
             Region.__region_gdf = region
+        Region.__uid = uuid.uuid4()
         return region['uid']
 
     @staticmethod
@@ -85,6 +91,7 @@ class Region(Object):
             Region.__region_gdf = gpd.pd.concat([Region.__region_gdf, regions], ignore_index=False)
         else:
             Region.__region_gdf = regions
+        Region.__uid = uuid.uuid4()
         return list(regions['uid'])
 
     @staticmethod
@@ -135,6 +142,7 @@ class Region(Object):
     def delete_region(region):
         uid = region['uid']
         Region.__region_gdf.drop(uid, inplace=True)
+        Region.__uid = uuid.uuid4()
 
     @staticmethod
     def delete_region_by_uid(uid):
@@ -144,6 +152,7 @@ class Region(Object):
     @staticmethod
     def delete_all():
         Region.__region_gdf.drop(Region.__region_gdf['uid'], inplace=True)
+        Region.__uid = uuid.uuid4()
 
     # endregion
 
@@ -208,8 +217,10 @@ class Region(Object):
     # region 编辑修改
     @staticmethod
     def set_attr_value(regions, attr, value):
+        # TODO: 这里可能有问题
         assert attr in Region.__region_attrs, f'unexpected attr ({attr}), attr must be one of these: {Region.__region_attrs}'
         regions[attr] = value
+        Region.__uid = uuid.uuid4()
 
     # endregion
 

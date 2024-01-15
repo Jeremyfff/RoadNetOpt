@@ -1,185 +1,40 @@
 import logging
-
 import matplotlib
-import pygame
 from OpenGL.GL import *
-import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 from datetime import datetime
 from geopandas import GeoDataFrame
 import imgui
-
-from style_module import StyleManager, StyleScheme
-import utils.common_utils
-from utils.common_utils import timer
-from utils import RoadCluster, BuildingCluster, RegionCluster
-from geo import Road, Building, Region
-import cv2
 import geopandas as gpd
 import torch
 
+from geo import Road, Building, Region
+from style_module import StyleManager
+from utils import RoadCluster, BuildingCluster, RegionCluster
+from utils import common_utils
+from utils.common_utils import timer
+from utils import graphic_uitls
+from gui.icon_module import IconManager, Spinner
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def _plot_gdf_func(**kwargs):
-    assert 'gdf' in kwargs
-    assert 'ax' in kwargs
-    gdf = kwargs['gdf']
-    kwargs.pop('gdf')
 
-    if isinstance(gdf, GeoDataFrame):
-        gdf.plot(**kwargs)
-    elif isinstance(gdf, list):
-        for df in gdf:
-            df.plot(**kwargs)
+def plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
+                  **kwargs):
+    logging.warning('graphic_modlue.plot_as_array功能已被迁移至graphic_uitls中，请使用graphic_uitls.plot_as_array\n您调用的方法将在未来被删除，请及时调整代码')
+    return graphic_uitls.plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
+                  **kwargs)
 
-
-def plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, **kwargs):
-    """kwargs 将会被传递给_plot_gdf_func的gdf.plot方法"""
-    return plot_as_array2(_plot_gdf_func, width, height, y_lim, x_lim, transparent, antialiased, gdf=gdf, **kwargs)
 
 @timer
-def plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, **kwargs):
-    # 禁用/启用抗锯齿效果
-    matplotlib.rcParams['lines.antialiased'] = antialiased
-    matplotlib.rcParams['patch.antialiased'] = antialiased
+def plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
+                   **kwargs):
+    logging.warning(
+        'graphic_modlue.plot_as_array2功能已被迁移至graphic_uitls中，请使用graphic_uitls.plot_as_array2\n您调用的方法将在未来被删除，请及时调整代码')
+    return graphic_uitls.plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
+                   **kwargs)
 
-    plt.clf()
-    plt.close('all')
-    fig, ax = plt.subplots(figsize=(width / 100, height / 100), dpi=100)
-    if transparent:
-        fig.patch.set_facecolor('none')  # 设置 figure 的背景色为透明
-        ax.patch.set_facecolor('none')  # 设置 axes 的背景色为透明
-    ax.set_xticks([])  # 没有 x 轴坐标
-    ax.set_yticks([])  # 没有 y 轴坐标
-    ax.set_aspect('equal')  # 横纵轴比例相同
-    ax.set_facecolor('none')  # 设置图形背景为透明
-    fig.tight_layout()
-    fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
-    canvas = FigureCanvas(fig)
-
-    plot_func(ax=ax, **kwargs)
-
-    # 如果指定了y lim， 则使用指定的y lim， 否则将由matplotlib自动计算y lim
-    if y_lim:
-        ax.set_ylim(y_lim)
-    else:
-        pass
-        # use default y lim
-    # 如果指定了x lim，则使用指定的x lim，如果x lim和y lim的比例与图像的宽高比不同，图像将保持在中间，将会造成坐标空间映射的不准确
-    # 将x lim留空以让程序自动根据图像宽高比计算x lim
-    if x_lim:
-        ax.set_xlim(x_lim)
-    else:
-        # calculate x lim by y lim
-        x_range = ax.get_xlim()
-        x_min = x_range[0]
-        x_max = x_range[1]
-        y_range = ax.get_ylim()
-        y_min = y_range[0]
-        y_max = y_range[1]
-
-        y_width = y_max - y_min
-        new_x_width = width / height * y_width
-
-        x_center = (x_min + x_max) / 2
-        new_x_range = (x_center - new_x_width / 2, x_center + new_x_width / 2)
-        ax.set_xlim(new_x_range)
-
-    canvas.draw()  # 绘制到画布上
-
-    # 从画布中提取图像数据为 NumPy 数组
-    image_data = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8)
-    image_data = image_data.reshape(canvas.get_width_height()[::-1] + (4,))
-
-    # 校准输出尺寸
-    output_width = image_data.shape[1]
-    output_height = image_data.shape[0]
-    if output_width != width or output_height != height:
-        print('遇到了输出误差，正在自动校准 ')
-        # 裁剪多余部分
-        if output_width > width:
-            image_data = image_data[:, 0:width, :]
-        if output_height > height:
-            image_data = image_data[0:height, :, :]
-        # 重新计算大小，此时的imagedata 一定小于等于期望大小
-        output_width = image_data.shape[1]
-        output_height = image_data.shape[0]
-        # 补足不全部分
-        if output_width < width or output_height < height:
-            new_image = np.zeros((height, width, 4), dtype=np.uint8)
-            new_image[0:output_height, 0:output_width, :] = image_data
-            image_data = new_image
-    return image_data, ax
-
-
-def world_space_to_image_space(world_x, world_y, x_lim, y_lim, image_width, image_height):
-    assert x_lim[1] - x_lim[0] > 0
-    assert y_lim[1] - y_lim[0] > 0
-
-    image_x = int((world_x - x_lim[0]) / (x_lim[1] - x_lim[0]) * image_width)
-    image_y = int((world_y - y_lim[0]) / (y_lim[1] - y_lim[0]) * image_height)
-    return image_x, image_y
-
-
-def image_space_to_world_space(image_x, image_y, x_lim, y_lim, image_width, image_height):
-    assert image_width != 0
-    assert image_height != 0
-    world_x = (image_x / image_width) * (x_lim[1] - x_lim[0]) + x_lim[0]
-    world_y = (image_y / image_height) * (y_lim[1] - y_lim[0]) + y_lim[0]
-    return world_x, world_y
-
-
-def create_texture_from_array(data):
-    height, width, channels = data.shape
-
-    # 生成纹理对象
-    texture_id = glGenTextures(1)
-    glBindTexture(GL_TEXTURE_2D, texture_id)
-
-    # 设置纹理参数
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-
-    # 将数据上传到纹理
-    if channels == 3:
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data)
-    elif channels == 4:
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data)
-
-    return texture_id
-
-@timer
-def update_texture(texture_id, data):
-    glBindTexture(GL_TEXTURE_2D, texture_id)
-
-    height, width, channels = data.shape
-
-    if channels == 3:
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, data)
-    elif channels == 4:
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data)
-
-@timer
-def blend_img_data(bot, top):
-    # 分离 alpha 通道
-    bot_a = bot[:, :, 3] / 255.0
-    top_a = top[:, :, 3] / 255.0
-
-    bot_rgb = bot[:, :, :3].astype(np.float32)
-    top_rgb = top[:, :, :3].astype(np.float32)
-
-    blended_rgb = (1 - top_a[:, :, np.newaxis]) * bot_rgb + top_a[:, :, np.newaxis] * top_rgb
-
-    blended_alpha = bot_a + top_a * (1 - bot_a)
-    blended_alpha = blended_alpha * 255
-    blended = np.concatenate((blended_rgb, blended_alpha[:, :, np.newaxis]), axis=2)
-    blended = blended.astype(np.uint8)
-    return blended
 
 
 class GraphicTexture:
@@ -201,8 +56,8 @@ class GraphicTexture:
         print(f'[update_size]update size to {width}, {height}')
         self.width = width
         self.height = height
-        self.blank_img_data = np.zeros((self.height, self.width, 4), dtype=np.uint8)
-        self.texture_id = create_texture_from_array(self.blank_img_data)
+        self.blank_img_data = torch.zeros((self.height, self.width, 4), dtype=torch.uint8)
+        self.texture_id = graphic_uitls.create_texture_from_array(self.blank_img_data)
 
     def bilt_data(self, data, auto_cache=True):
         if data is None:
@@ -216,7 +71,7 @@ class GraphicTexture:
             print(f'[bilt_data] bilt data过程中self.size 与input data的size不匹配')
             self.update_size(width, height)
             print(f'[bilt_data] self.size updated to {self.width}, {self.height}')
-        update_texture(self.texture_id, data)
+        graphic_uitls.update_texture(self.texture_id, data)
         if auto_cache:
             self.cache_data(data)
         self.last_update_time = datetime.now().strftime("%H-%M-%S")
@@ -228,13 +83,13 @@ class GraphicTexture:
         self.cached_data = None
 
     def plot_gdf(self, gdf, **kwargs):
-        image_data, ax = plot_as_array(gdf, self.width, self.height, y_lim=self.y_lim, **kwargs)
+        image_data, ax = graphic_uitls.plot_as_array(gdf, self.width, self.height, y_lim=self.y_lim, **kwargs)
         self.x_lim = ax.get_xlim()
         self.y_lim = ax.get_ylim()
         self.bilt_data(image_data)
 
     def plot_by_func(self, func, **kwargs):
-        image_data, ax = plot_as_array2(func, self.width, self.height, self.y_lim, self.x_lim, **kwargs)
+        image_data, ax = graphic_uitls.plot_as_array2(func, self.width, self.height, self.y_lim, self.x_lim, **kwargs)
         self.x_lim = ax.get_xlim()
         self.y_lim = ax.get_ylim()
         self.bilt_data(image_data)
@@ -252,35 +107,54 @@ class MainGraphTexture(GraphicTexture):
         self._region_cluster = RegionCluster()
 
         self._any_change = False
+
         self.cached_road_data = None
         self.cached_building_data = None
         self.cached_region_data = None
         self.cached_road_idx = None
         self.cached_highlighted_road_data = None
 
+        self.cached_road_uid = None
+        self.cached_building_uid = None
+        self.cached_region_uid = None
+
     def show_imgui_display_editor(self):
         road_changed = False
         building_changed = False
         region_changed = False
+        # roads
+        IconManager.instance.imgui_icon('road-fill')
+        imgui.same_line()
         clicked, self.enable_render_roads = imgui.checkbox('render roads', True)
         if clicked:
             imgui.open_popup('warning')
-        if imgui.begin_popup_modal('warning', flags=imgui.WINDOW_NO_MOVE|imgui.WINDOW_NO_RESIZE|imgui.WINDOW_NO_TITLE_BAR|imgui.WINDOW_ALWAYS_AUTO_RESIZE).opened:
+        if imgui.begin_popup_modal('warning',
+                                   flags=imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_ALWAYS_AUTO_RESIZE).opened:
             size = imgui.get_window_size()
             imgui.text('不能关闭道路的显示')
-            if imgui.button('知道了', width=size.x-16, height=22):
+            if imgui.button('知道了', width=size.x - 16, height=22):
                 imgui.close_current_popup()
             imgui.end_popup()
         if self.enable_render_roads:
             imgui.indent()
             road_changed |= self._road_cluster.show_imgui_cluster_editor_button()
             imgui.unindent()
+        # buildings
+        IconManager.instance.imgui_icon('building-fill')
+        imgui.same_line()
         clicked, self.enable_render_buildings = imgui.checkbox('render buildings', self.enable_render_buildings)
+        if clicked:
+            self._any_change = True
         if self.enable_render_buildings:
             imgui.indent()
             building_changed |= self._building_cluster.show_imgui_cluster_editor_button()
             imgui.unindent()
+        # regions
+        IconManager.instance.imgui_icon('polygon')
+        imgui.same_line()
         clicked, self.enable_render_regions = imgui.checkbox('render regions', self.enable_render_regions)
+        if clicked:
+            self._any_change = True
         if self.enable_render_regions:
             imgui.indent()
             region_changed |= self._region_cluster.show_imgui_cluster_editor_button()
@@ -293,16 +167,14 @@ class MainGraphTexture(GraphicTexture):
         if region_changed:
             self.clear_region_data()
 
-
     def plot_gdf(self, gdf, **kwargs):
         logging.warning('main graph texture dose not support plot gdf')
 
     def _in_regions(self, pos):
         return 0 <= pos[0] < self.width and 0 <= pos[1] < self.height
 
-
     def _wrapped_plot_as_array2(self, plot_func, **kwargs):
-        img_data, ax = plot_as_array2(plot_func=plot_func,
+        img_data, ax = graphic_uitls.plot_as_array2(plot_func=plot_func,
                                       width=self.width,
                                       height=self.height,
                                       y_lim=self.y_lim,
@@ -312,9 +184,8 @@ class MainGraphTexture(GraphicTexture):
                                       )
         return img_data, ax
 
-
     def _render_roads(self):
-        if self.cached_road_data is None:
+        if self.cached_road_data is None or self.cached_road_uid != Road.uid():
             img_data, ax = self._wrapped_plot_as_array2(Road.plot_using_style_factory,
                                                         x_lim=self.x_lim,
                                                         roads=Road.get_roads_by_cluster(self._road_cluster),
@@ -324,33 +195,34 @@ class MainGraphTexture(GraphicTexture):
                 self.x_lim = ax.get_xlim()
                 self.y_lim = ax.get_ylim()
             self.cached_road_data = img_data
+            self.cached_road_uid = Road.uid()
             self._any_change = True
         else:
             img_data = self.cached_road_data
         return img_data
 
-
     def _render_buildings(self):
-        if self.cached_building_data is None:
+        if self.cached_building_data is None or self.cached_building_uid != Building.uid():
             img_data, ax = self._wrapped_plot_as_array2(Building.plot_using_style_factory,
                                                         x_lim=self.x_lim,
                                                         buildings=Building.get_buildings_by_cluster(
                                                             self._building_cluster),
                                                         style_factory=StyleManager.instance.display_style.get_current_building_style_factory())
             self.cached_building_data = img_data
+            self.cached_building_uid = Building.uid()
             self._any_change = True
         else:
             img_data = self.cached_building_data
         return img_data
 
-
     def _render_regions(self):
-        if self.cached_region_data is None:
+        if self.cached_region_data is None or self.cached_region_uid != Region.uid():
             img_data, ax = self._wrapped_plot_as_array2(Region.plot_using_style_factory,
                                                         x_lim=self.x_lim,
                                                         regions=Region.get_regions_by_cluster(self._region_cluster),
                                                         style_factory=StyleManager.instance.display_style.get_current_region_style_factory())
             self.cached_region_data = img_data
+            self.cached_region_uid = Region.uid()
             self._any_change = True
         else:
             img_data = self.cached_region_data
@@ -385,7 +257,7 @@ class MainGraphTexture(GraphicTexture):
                                                             colors=(0, 1, 0, 1))
 
             else:
-                img_data = np.zeros((self.height, self.width, 4), dtype=np.uint8)
+                img_data = torch.zeros((self.height, self.width, 4), dtype=torch.uint8)
             self.cached_highlighted_road_data = img_data
             self._any_change = True
         else:
@@ -393,9 +265,9 @@ class MainGraphTexture(GraphicTexture):
         return img_data
 
     def _get_road_idx(self, idx_img_data, mouse_pos):
-        pointer_color = idx_img_data[mouse_pos[1], mouse_pos[0]]
-        id = utils.common_utils.rgb_to_id(pointer_color)
-        on_road = not np.array_equal(pointer_color, np.array([255, 255, 255, 0]))
+        pointer_color = idx_img_data[mouse_pos[1], mouse_pos[0]].cpu().numpy()
+        id = common_utils.rgb_to_id(pointer_color)
+        on_road = pointer_color[3].item() != 0
         print(f'id = {id}, color = {pointer_color}')
         return on_road, id
 
@@ -413,7 +285,6 @@ class MainGraphTexture(GraphicTexture):
     def update(self, **kwargs):
         if Road.get_all_roads().empty:
             return
-
         window_size = kwargs['window_size']
         selected_roads = kwargs['selected_roads']
         window_width, window_height = window_size[0], window_size[1]
@@ -425,7 +296,6 @@ class MainGraphTexture(GraphicTexture):
             print(f'[update] return')
             return
 
-        self._any_change = False
         if self.enable_render_roads:
             road_data = self._render_roads()
             highlight_data = self._render_highlighted_road(selected_roads)
@@ -445,10 +315,12 @@ class MainGraphTexture(GraphicTexture):
 
         if self._any_change:
             print('[update] new change detected')
-            blended = blend_img_data(region_data, building_data)
-            blended = blend_img_data(blended, road_data)
-            blended = blend_img_data(blended, highlight_data)
+            blended = graphic_uitls.blend_img_data(region_data, building_data)
+            blended = graphic_uitls.blend_img_data(blended, road_data)
+            blended = graphic_uitls.blend_img_data(blended, highlight_data)
             self.bilt_data(blended, auto_cache=False)
+
+        self._any_change = False  # reset to False
 
     def clear_cache(self):
         self.cached_data = None
@@ -476,6 +348,8 @@ class MainGraphTexture(GraphicTexture):
 
     def clear_region_data(self):
         self.cached_region_data = None
+
+
 class GraphicManager:
     instance: 'GraphicManager' = None
 
