@@ -6,12 +6,15 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from geopandas import GeoDataFrame
 import imgui
+<<<<<<< Updated upstream
 <<<<<<< HEAD
 
 from style_module import StyleManager, PlotStyle
 import utils.common_utils
 from geo import Road
 import cv2
+=======
+>>>>>>> Stashed changes
 import geopandas as gpd
 =======
 import geopandas as gpd
@@ -36,6 +39,7 @@ def plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, 
                   **kwargs)
 
 
+<<<<<<< Updated upstream
 <<<<<<< HEAD
 def plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, **kwargs):
     """kwargs 将会被传递给_plot_gdf_func的gdf.plot方法"""
@@ -174,6 +178,16 @@ def plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent
                    **kwargs)
 
 >>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
+=======
+@timer
+def plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
+                   **kwargs):
+    logging.warning(
+        'graphic_modlue.plot_as_array2功能已被迁移至graphic_uitls中，请使用graphic_uitls.plot_as_array2\n您调用的方法将在未来被删除，请及时调整代码')
+    return graphic_uitls.plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
+                   **kwargs)
+
+>>>>>>> Stashed changes
 
 
 class GraphicTexture:
@@ -193,6 +207,7 @@ class GraphicTexture:
         print(f'[update_size]update size to {width}, {height}')
         self.width = width
         self.height = height
+<<<<<<< Updated upstream
 <<<<<<< HEAD
         data = np.zeros((self.height, self.width, 4), dtype=np.uint8)
         self.texture_id = create_texture_from_array(data)
@@ -200,6 +215,10 @@ class GraphicTexture:
         self.blank_img_data = torch.zeros((self.height, self.width, 4), dtype=torch.uint8)
         self.texture_id = graphic_uitls.create_texture_from_array(self.blank_img_data)
 >>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
+=======
+        self.blank_img_data = torch.zeros((self.height, self.width, 4), dtype=torch.uint8)
+        self.texture_id = graphic_uitls.create_texture_from_array(self.blank_img_data)
+>>>>>>> Stashed changes
 
     def bilt_data(self, data, auto_cache=True):
         if data is None:
@@ -249,8 +268,11 @@ class MainGraphTexture(GraphicTexture):
         self.cached_road_idx = None
         self.cached_highlighted_road_data = None
 
+<<<<<<< Updated upstream
 <<<<<<< HEAD
 =======
+=======
+>>>>>>> Stashed changes
         self.cached_road_uid = None
         self.cached_building_uid = None
         self.cached_region_uid = None
@@ -304,7 +326,10 @@ class MainGraphTexture(GraphicTexture):
         if region_changed:
             self.clear_region_data()
 
+<<<<<<< Updated upstream
 >>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
+=======
+>>>>>>> Stashed changes
     def plot_gdf(self, gdf, **kwargs):
         logging.warning('main graph texture dose not support plot gdf')
 
@@ -322,6 +347,7 @@ class MainGraphTexture(GraphicTexture):
                                       **kwargs
                                       )
         return img_data, ax
+<<<<<<< Updated upstream
 <<<<<<< HEAD
     def _render_road(self):
         if self.cached_road_data is None:
@@ -330,6 +356,11 @@ class MainGraphTexture(GraphicTexture):
     def _render_roads(self):
         if self.cached_road_data is None or self.cached_road_uid != Road.uid():
 >>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
+=======
+
+    def _render_roads(self):
+        if self.cached_road_data is None or self.cached_road_uid != Road.uid():
+>>>>>>> Stashed changes
             img_data, ax = self._wrapped_plot_as_array2(Road.plot_using_style_factory,
                                                         roads=Road.get_all_roads(),
                                                         style_factory=StyleManager.instance.display_style.get_current_road_style_factory())
@@ -342,8 +373,11 @@ class MainGraphTexture(GraphicTexture):
             img_data = self.cached_road_data
         return img_data
 
+<<<<<<< Updated upstream
 <<<<<<< HEAD
 =======
+=======
+>>>>>>> Stashed changes
     def _render_buildings(self):
         if self.cached_building_data is None or self.cached_building_uid != Building.uid():
             img_data, ax = self._wrapped_plot_as_array2(Building.plot_using_style_factory,
@@ -409,6 +443,7 @@ class MainGraphTexture(GraphicTexture):
         return img_data
 
     def _get_road_idx(self, idx_img_data, mouse_pos):
+<<<<<<< Updated upstream
 <<<<<<< HEAD
         pointer_color = idx_img_data[mouse_pos[1], mouse_pos[0]]
         id = utils.common_utils.rgb_to_id(pointer_color)
@@ -418,6 +453,11 @@ class MainGraphTexture(GraphicTexture):
         id = common_utils.rgb_to_id(pointer_color)
         on_road = pointer_color[3].item() != 0
 >>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
+=======
+        pointer_color = idx_img_data[mouse_pos[1], mouse_pos[0]].cpu().numpy()
+        id = common_utils.rgb_to_id(pointer_color)
+        on_road = pointer_color[3].item() != 0
+>>>>>>> Stashed changes
         print(f'id = {id}, color = {pointer_color}')
         return on_road, id
 
@@ -444,6 +484,7 @@ class MainGraphTexture(GraphicTexture):
             print(f'[update] self.size updated to {self.width}, {self.height}')
             print(f'[update] return')
             return
+<<<<<<< Updated upstream
 <<<<<<< HEAD
         self._any_change = False
         road_data = self._render_road()
@@ -476,6 +517,8 @@ class MainGraphTexture(GraphicTexture):
             print(f'[update] blend data size {blended.shape}')
             print(f'[update] {blended}')
 =======
+=======
+>>>>>>> Stashed changes
 
         if self.enable_render_roads:
             road_data = self._render_roads()
@@ -499,7 +542,10 @@ class MainGraphTexture(GraphicTexture):
             blended = graphic_uitls.blend_img_data(region_data, building_data)
             blended = graphic_uitls.blend_img_data(blended, road_data)
             blended = graphic_uitls.blend_img_data(blended, highlight_data)
+<<<<<<< Updated upstream
 >>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
+=======
+>>>>>>> Stashed changes
             self.bilt_data(blended, auto_cache=False)
 
         self._any_change = False  # reset to False
@@ -509,6 +555,13 @@ class MainGraphTexture(GraphicTexture):
         self.cached_road_data = None
         self.cached_road_idx = None
         self.cached_highlighted_road_data = None
+<<<<<<< Updated upstream
+=======
+        self.cached_building_data = None
+        self.cached_region_data = None
+        self.x_lim = None
+        self.y_lim = None
+>>>>>>> Stashed changes
 
     def clear_highlight_data(self):
         self.cached_highlighted_road_data = None
@@ -523,8 +576,15 @@ class MainGraphTexture(GraphicTexture):
     def clear_region_data(self):
         self.cached_region_data = None
 
+<<<<<<< Updated upstream
 
 >>>>>>> 8f55c28 (Merge branch 'main' of https://github.com/Jeremyfff/RoadNetOpt)
+=======
+    def clear_x_y_lim(self):
+        self.x_lim = None
+        self.y_lim = None
+
+>>>>>>> Stashed changes
 class GraphicManager:
     instance = None
 
