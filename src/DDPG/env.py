@@ -72,7 +72,7 @@ class RoadNet:
                                                           state=RoadState.OPTIMIZING)
         else:
             pass
-
+    
     def return_image_observation(self):
         """返回状态，为 图像 格式"""
         roads = Road.get_all_roads()
@@ -121,7 +121,30 @@ class RoadNet:
         return new_observation, reward, done, Done
 
     def reward(self):
-        return np.zeros((self.nb_new_roads,1))
+        # print(self.last_points)
+        # return np.zeros((self.nb_new_roads,1))
+
+        # roads = Road.get_all_roads()
+        buildings = Building.get_all_buildings()
+        regions = Region.get_all_regions()
+        min_x, max_x = -100,450*1.2
+        min_y, max_y = -100*1.2,400*1.2
+        min, max = 0, 512
+        # list_road = [roads]
+        # road_img, ax = plot_as_array(list_road, 512, 512,
+        #               y_lim=(-100*1.2,400*1.2), x_lim=(-100,450*1.2),
+        #               transparent=True, antialiased=False)     
+        list_buire = [buildings, regions]
+        buire_img, ax = plot_as_array(list_buire, max, max,
+                      y_lim=(min_y, max_y), x_lim=(min_x, max_x),
+                      transparent=True, antialiased=False)
+        
+        scaled_points_x = np.interp(self.last_points[:, 0], (min_x, max_x), (min, max))
+        scaled_points_y = np.interp(self.last_points[:, 1], (min_y, max_y), (min, max))
+        points = np.column_stack((scaled_points_x, scaled_points_y))
+        from DDPG.reward_agent import RewardAgent
+        rewardagent = RewardAgent(points,buire_img.numpy()[:, :, :3])
+        return rewardagent.agent_reward()
 
     def done(self):
         """
