@@ -49,7 +49,10 @@ def show():
                 # IconManager.imgui_icon('fill', width=texture.width*g.mTextureScale, height=texture.height*g.mTextureScale)
                 imgui.image(texture.texture_id, texture.width * g.mTextureScale, texture.height * g.mTextureScale)
                 if texture.name == 'main':
+                    g.mShowingMainTextureWindow = True
                     imgui_main_texture_toolbox_subwindow.show(mImageWindowInnerPos)
+                else:
+                    g.mShowingMainTextureWindow = False
                 mTextureInfo['last updated'] = str(texture.last_update_time)
                 mTextureInfo['texture size'] = f"{texture.width} , {texture.height}"
                 mTextureInfo['x_lim'] = str(texture.x_lim)

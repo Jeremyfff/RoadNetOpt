@@ -1,4 +1,4 @@
-GLOBAL_SCALE = 1.5
+GLOBAL_SCALE = 1.25
 INIT_WINDOW_WIDTH = 1920 * GLOBAL_SCALE
 INIT_WINDOW_HEIGHT = 1080 * GLOBAL_SCALE
 LEFT_WINDOW_WIDTH = 400 * GLOBAL_SCALE
@@ -15,7 +15,7 @@ DEFAULT_ICON_HEIGHT = 16 * GLOBAL_SCALE
 
 
 mTextureScale = 2
-
+mChineseFont = None
 
 mFirstLoop = True
 mFrameTime = 0
@@ -25,13 +25,15 @@ mInfoWindowOpened = True
 mLoggingWindowOpened = False
 
 mSelectedRoads = {}  # 被选中的道路 dict{uid:road}
-
 mHoveringImageWindow = False
 mHoveringInfoSubWindow = False
 mHoveringMainTextureSubWindow = False
 mHoveringDxfSubWindow = False
 
+mShowingMainTextureWindow = False
 mImageSize = (0, 0)
 mMousePosInImage = (0, 0)
 
-mChineseFont = None
+mAddNodeMode = False
+mCurrentEditingRoad = None
+

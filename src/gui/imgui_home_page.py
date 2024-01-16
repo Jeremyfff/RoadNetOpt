@@ -1,4 +1,5 @@
 import imgui
+import sys
 
 from gui import global_var as g
 from gui import components as imgui_c
@@ -12,6 +13,7 @@ def show():
     imgui.text('工具作者：冯以恒， 武文忻， 邱淑冰')
     imgui.text('使用帮助：')
     imgui.text('请点击geo标签栏')
-
+    if imgui.button('exit', width=200*g.GLOBAL_SCALE, height=24*g.GLOBAL_SCALE):
+        sys.exit(0)
     _, g.mTextureScale = imgui.slider_float('target texture scale', g.mTextureScale, 0.5, 10)
     imgui.pop_id()

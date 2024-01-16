@@ -8,6 +8,7 @@ from geopandas import GeoDataFrame
 import imgui
 import geopandas as gpd
 import torch
+from typing import *
 
 from geo import Road, Building, Region
 from style_module import StyleManager
@@ -16,15 +17,17 @@ from utils import common_utils
 from utils.common_utils import timer
 from utils import graphic_uitls
 from gui.icon_module import IconManager, Spinner
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
                   **kwargs):
-    logging.warning('graphic_modlue.plot_as_array功能已被迁移至graphic_uitls中，请使用graphic_uitls.plot_as_array\n您调用的方法将在未来被删除，请及时调整代码')
-    return graphic_uitls.plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
-                  **kwargs)
+    logging.warning(
+        'graphic_modlue.plot_as_array功能已被迁移至graphic_uitls中，请使用graphic_uitls.plot_as_array\n您调用的方法将在未来被删除，请及时调整代码')
+    return graphic_uitls.plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False,
+                                       tensor=True,
+                                       **kwargs)
 
 
 @timer
@@ -32,9 +35,9 @@ def plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent
                    **kwargs):
     logging.warning(
         'graphic_modlue.plot_as_array2功能已被迁移至graphic_uitls中，请使用graphic_uitls.plot_as_array2\n您调用的方法将在未来被删除，请及时调整代码')
-    return graphic_uitls.plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
-                   **kwargs)
-
+    return graphic_uitls.plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True,
+                                        antialiased=False, tensor=True,
+                                        **kwargs)
 
 
 class GraphicTexture:
@@ -101,6 +104,7 @@ class MainGraphTexture(GraphicTexture):
         self.enable_render_roads = True
         self.enable_render_buildings = False
         self.enable_render_regions = False
+        self.enable_render_nodes = True
 
         self._road_cluster = RoadCluster()
         self._building_cluster = BuildingCluster()
@@ -109,6 +113,7 @@ class MainGraphTexture(GraphicTexture):
         self._any_change = False
 
         self.cached_road_data = None
+        self.cached_node_data = None
         self.cached_building_data = None
         self.cached_region_data = None
         self.cached_road_idx = None
@@ -160,6 +165,14 @@ class MainGraphTexture(GraphicTexture):
             region_changed |= self._region_cluster.show_imgui_cluster_editor_button()
             imgui.unindent()
 
+        # nodes
+        IconManager.instance.imgui_icon('vector-polygon')
+        imgui.same_line()
+        clicked, self.enable_render_nodes = imgui.checkbox('render nodes', self.enable_render_nodes)
+        if clicked:
+            self._any_change = True
+
+
         if road_changed:
             self.clear_road_data()
         if building_changed:
@@ -175,13 +188,13 @@ class MainGraphTexture(GraphicTexture):
 
     def _wrapped_plot_as_array2(self, plot_func, **kwargs):
         img_data, ax = graphic_uitls.plot_as_array2(plot_func=plot_func,
-                                      width=self.width,
-                                      height=self.height,
-                                      y_lim=self.y_lim,
-                                      transparent=True,
-                                      antialiased=False,
-                                      **kwargs
-                                      )
+                                                    width=self.width,
+                                                    height=self.height,
+                                                    y_lim=self.y_lim,
+                                                    transparent=True,
+                                                    antialiased=False,
+                                                    **kwargs
+                                                    )
         return img_data, ax
 
     def _render_roads(self):
@@ -197,6 +210,8 @@ class MainGraphTexture(GraphicTexture):
             self.cached_road_data = img_data
             self.cached_road_uid = Road.uid()
             self._any_change = True
+            self.cached_road_idx = None
+            self.cached_node_data = None
         else:
             img_data = self.cached_road_data
         return img_data
@@ -264,23 +279,29 @@ class MainGraphTexture(GraphicTexture):
             img_data = self.cached_highlighted_road_data
         return img_data
 
-    def _get_road_idx(self, idx_img_data, mouse_pos):
-        pointer_color = idx_img_data[mouse_pos[1], mouse_pos[0]].cpu().numpy()
-        id = common_utils.rgb_to_id(pointer_color)
-        on_road = pointer_color[3].item() != 0
-        print(f'id = {id}, color = {pointer_color}')
-        return on_road, id
-
-    def on_left_mouse_click(self, mouse_pos):
-        if self._in_regions(mouse_pos) and self.enable_render_roads:
-            idx_img_data = self._render_road_idx()
-            on_road, idx = self._get_road_idx(idx_img_data, mouse_pos)
-            if on_road:
-                self.clear_highlight_data()
-            print(f'[on_left_mouse_click] {on_road} {idx}')
-            return on_road, idx
+    def _render_nodes(self):
+        if self.cached_node_data is None:
+            img_data, ax = self._wrapped_plot_as_array2(Road.plot_nodes,
+                                                        x_lim=self.x_lim,
+                                                        nodes=Road.get_all_nodes(),
+                                                        )
+            self.cached_node_data = img_data
+            self._any_change = True
+            return img_data
         else:
-            return False, 0
+            return self.cached_node_data
+
+    def get_road_idx_by_mouse_pos(self, mouse_pos) -> Union[int, None]:
+        if not self._in_regions(mouse_pos) or not self.enable_render_roads:
+            return None
+        idx_img_data = self._render_road_idx()
+        pointer_color = idx_img_data[mouse_pos[1], mouse_pos[0]].cpu().numpy()
+        idx = common_utils.rgb_to_id(pointer_color)
+        on_road = pointer_color[3].item() != 0
+        if not on_road:
+            return None
+        # print(f'id = {idx}, color = {pointer_color}')
+        return idx
 
     def update(self, **kwargs):
         if Road.get_all_roads().empty:
@@ -313,15 +334,21 @@ class MainGraphTexture(GraphicTexture):
         else:
             region_data = self.blank_img_data
 
+        if self.enable_render_nodes:
+            node_data = self._render_nodes()
+        else:
+            node_data = self.blank_img_data
+
         if self._any_change:
             print('[update] new change detected')
             blended = graphic_uitls.blend_img_data(region_data, building_data)
             blended = graphic_uitls.blend_img_data(blended, road_data)
             blended = graphic_uitls.blend_img_data(blended, highlight_data)
+            if self.enable_render_nodes:
+                blended = graphic_uitls.blend_img_data(blended,node_data)
             self.bilt_data(blended, auto_cache=False)
 
         self._any_change = False  # reset to False
-
     def clear_cache(self):
         self.cached_data = None
         self.cached_road_data = None
@@ -354,6 +381,8 @@ class MainGraphTexture(GraphicTexture):
     def clear_x_y_lim(self):
         self.x_lim = None
         self.y_lim = None
+
+
 class GraphicManager:
     instance: 'GraphicManager' = None
 
@@ -363,7 +392,7 @@ class GraphicManager:
         # width, height = pygame.display.get_window_size()
         width = 1920
         height = 1080
-        self.main_texture = MainGraphTexture('main', width - 400, height - 200)
+        self.main_texture: MainGraphTexture = MainGraphTexture('main', width - 400, height - 200)
 
         self.textures['main'] = self.main_texture
 

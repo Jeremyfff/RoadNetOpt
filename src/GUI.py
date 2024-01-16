@@ -6,13 +6,15 @@ from imgui.integrations.pygame import PygameRenderer
 import OpenGL.GL as gl
 import ctypes
 import importlib
+import pyautogui
 
-from graphic_module import GraphicManager
+import graphic_module
 
-from gui.icon_module import IconManager
+from gui import icon_module
 from gui import common
 from gui import global_var as g
 from gui import imgui_style
+from gui import components as imgui_c
 
 from gui import imgui_bottom_window
 from gui import imgui_dxf_subwindow
@@ -38,6 +40,7 @@ ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 
 def imgui_debug_window():
     expanded, opened = imgui.begin('调试窗口', False)
+    imgui.text('package gui')
     if imgui.button('reload all gui'):
         importlib.reload(imgui_home_page)
         importlib.reload(imgui_geo_page)
@@ -53,47 +56,33 @@ def imgui_debug_window():
         importlib.reload(imgui_info_subwindow)
         importlib.reload(imgui_logging_subwindow)
         importlib.reload(imgui_bottom_window)
-
-    if imgui.tree_node('detail'):
-        if imgui.button('reload main window'):
-            importlib.reload(imgui_main_window)
-        imgui.indent()
-        if imgui.button('reload home page'):
-            importlib.reload(imgui_home_page)
-        if imgui.button('reload geo page'):
-            importlib.reload(imgui_geo_page)
-        if imgui.button('reload training page'):
-            importlib.reload(imgui_training_page)
-        if imgui.button('reload tool page'):
-            importlib.reload(imgui_tool_page)
-        if imgui.button('reload settings page'):
-            importlib.reload(imgui_settings_page)
-        imgui.unindent()
-        if imgui.button('reload image window'):
-            importlib.reload(imgui_image_window)
-        imgui.indent()
-        if imgui.button('reload main_texture_toolbox'):
-            importlib.reload(imgui_main_texture_toolbox_subwindow)
-        imgui.unindent()
-        imgui.indent()
-        if imgui.button('reload bottom window'):
-            importlib.reload(imgui_bottom_window)
-        if imgui.button('reload dxf sub window'):
-            importlib.reload(imgui_dxf_subwindow)
-        if imgui.button('reload info sub window'):
-            importlib.reload(imgui_info_subwindow)
-        if imgui.button('reload logging sub window'):
-            importlib.reload(imgui_logging_subwindow)
-        imgui.unindent()
-        imgui.tree_pop()
+    if imgui.button('reload common.py'):
+        importlib.reload(common)
+    if imgui.button('reload components.py'):
+        importlib.reload(imgui_c)
+    if imgui.button('reload imgui_style.py'):
+        importlib.reload(imgui_style)
+    if imgui.button('reload icon_module.py'):
+        importlib.reload(icon_module)
+    imgui.text('package geo')
+    imgui.text('package utils')
     imgui.end()
 
 
 def main():
     pygame.init()
+
+    screen_width, screen_height = pyautogui.size()
+    g.INIT_WINDOW_WIDTH = screen_width if g.INIT_WINDOW_WIDTH > screen_width else g.INIT_WINDOW_WIDTH
+    g.INIT_WINDOW_HEIGHT = screen_height if g.INIT_WINDOW_HEIGHT > screen_height else g.INIT_WINDOW_HEIGHT
     size = (g.INIT_WINDOW_WIDTH, g.INIT_WINDOW_HEIGHT)
+
     pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
-    pygame.display.set_caption('road net opt window')
+    pygame.display.set_caption('路网织补工具 V0.1')
+    # 加载图标
+    icon = pygame.image.load('../textures/dark/road-fill.png')  # 用您实际的图标文件名替换'icon.png'
+    pygame.display.set_icon(icon)
+
 
     imgui.create_context()
     impl = PygameRenderer()
@@ -104,8 +93,8 @@ def main():
     imgui_style.init_font(impl)
     imgui_style.push_dark()
 
-    graphic_manager = GraphicManager()
-    icon_manager = IconManager()
+    graphic_manager =graphic_module.GraphicManager()
+    icon_manager = icon_module.IconManager()
 
     lst_time = time.time()
     while True:

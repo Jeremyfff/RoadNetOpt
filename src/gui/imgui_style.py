@@ -13,8 +13,6 @@ def init_font(impl):
 
     impl.refresh_font_texture()
 def push_dark():
-
-
     imgui.style_colors_dark()
     imgui.push_style_color(imgui.COLOR_WINDOW_BACKGROUND, 0.10, 0.10, 0.10, 1.00)
     imgui.push_style_color(imgui.COLOR_BORDER, 0.32, 0.32, 0.32, 0.50)

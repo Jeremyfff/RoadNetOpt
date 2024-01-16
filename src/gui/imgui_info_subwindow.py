@@ -1,3 +1,5 @@
+import os
+import pickle
 
 import imgui
 import pygame
@@ -5,7 +7,8 @@ from graphic_module import GraphicManager
 from geo import Road, Building, Region
 from gui import global_var as g
 from gui import components as imgui_c
-
+from gui import common
+from utils import io_utils
 
 mGraphicCacheInfo = {}
 mGDFInfo = {}
@@ -32,7 +35,6 @@ def show():
         imgui_c.dict_viewer_component(mGDFInfo, 'dgf info', 'GDF Type', 'count', lambda value: str(value))
 
         imgui.text(f'selected roads {len(g.mSelectedRoads)}')
-
         imgui.text('')
         imgui.text('图像缓冲区:')
         mGraphicCacheInfo[

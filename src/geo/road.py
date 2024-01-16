@@ -28,7 +28,7 @@ logger = logging.getLogger()
 class Road(Object):
     """部分功能还没有经过实验"""
     __node_attrs = ['uid', 'x', 'y', 'geometry', 'cache']
-    __edge_attrs = ['u', 'v', 'uid', 'geometry', 'level', 'state', 'cache']
+    __edge_attrs = ['u', 'v', 'uid', 'geometry', 'level', 'state', 'cache', 'geohash']
 
     __node_gdf = gpd.GeoDataFrame(columns=__node_attrs)
     __node_gdf.set_index('uid')
@@ -175,7 +175,8 @@ class Road(Object):
                    'level': [level],
                    'state': [state],
                    'uid': [uid],
-                   'cache': False
+                   'cache': False,
+                   'geohash': hash(tuple(geometry.coords))
                    }
         return gpd.GeoDataFrame(new_row, index=new_row['uid']).iloc[0]
 
@@ -194,12 +195,14 @@ class Road(Object):
         u_list = [Road._get_coord_uid(geom.coords[0]) for geom in geometry_list]
         v_list = [Road._get_coord_uid(geom.coords[-1]) for geom in geometry_list]
         uid_list = [uuid.uuid4() for _ in geometry_list]
+        geohash_list = [hash(tuple(geometry.coords)) for geometry in geometry_list]
         new_data = {'u': u_list,
                     'v': v_list,
                     'geometry': geometry_list,
                     'level': levels_list,
                     'state': states_list,
-                    'uid': uid_list
+                    'uid': uid_list,
+                    'geohash': geohash_list
                     }
         return gpd.GeoDataFrame(new_data, index=new_data['uid'])
 
@@ -276,10 +279,13 @@ class Road(Object):
         Road.__uid = uuid.uuid4()
 
         # handle cache
-        if road['cache']:
-            # 如果road是cached过的， 那么任何更改都会导致cache失效
-            Road._flag_cached_graph_need_update = True
-
+        try:
+            print('1 cache in road')
+            if road['cache']:
+                # 如果road是cached过的， 那么任何更改都会导致cache失效
+                Road._flag_cached_graph_need_update = True
+        except:
+            print('2 cache not in road')
             # delete unused nodes
         if update_nodes_immediately:
             Road._clear_node(u)
@@ -303,6 +309,14 @@ class Road(Object):
     # endregion
 
     # region 获取查找
+    @staticmethod
+    def get_nodes_by_roads(roads:gpd.GeoDataFrame):
+        node_uids = set()
+        for uid, road in roads.iterrows():
+            node_uids.add(road['u'])
+            node_uids.add(road['v'])
+        filtered_gdf = Road.__edge_gdf[Road.__edge_gdf.index.isin(node_uids)]
+        return filtered_gdf
     @staticmethod
     def get_edge_attrs():
         return Road.__edge_attrs
@@ -376,9 +390,23 @@ class Road(Object):
         common_uid = list(set.intersection(*uid_sets_by_attr))
         return Road.get_all_roads().loc[common_uid]
 
+    @staticmethod
+    def get_road_by_hash(hash_code)-> pd.Series:
+        roads = Road.get_roads_by_attr_and_value('geohash', hash_code)
+        assert not roads.empty, '未找到road'
+        assert len(roads) == 1, f'产生了hash碰撞, roads信息如下 {roads}'
+        return roads.iloc[0]
 
-
-
+    @staticmethod
+    def get_roads_by_hashes(hashes)-> gpd.GeoDataFrame :
+        hashes = set(hashes)  # 去重
+        gdfs = []
+        for hash in hashes:
+            roads = Road.get_roads_by_attr_and_value('geohash', hash)
+            if not roads.empty:
+                gdfs.append(roads)
+        assert len(gdfs) > 0
+        return pd.concat(gdfs, ignore_index=False)
 
     # endregion
 
@@ -513,6 +541,13 @@ class Road(Object):
     # endregion
 
     # region 绘图相关
+    @staticmethod
+    def plot_nodes(nodes, *args, **kwargs):
+        if nodes is None:
+            return
+        nodes = gpd.GeoDataFrame(nodes, geometry='geometry')
+        nodes.plot(*args, **kwargs)
+
     @staticmethod
     def plot_roads(roads, *args, **kwargs):
         if roads is None:
@@ -740,11 +775,14 @@ class Road(Object):
             Road.rebuild_coord_to_uid_dict()  # 这里这么做是因为偷懒没有在cache的时候保存coord_to_uid的dict的副本， 因此当node gdf改变时需要更新一下
         else:
             logging.warning("no cache to restore")
+        Road.__uid = uuid.uuid4()
 
     @staticmethod
     def rebuild_coord_to_uid_dict():
         """重建Road.__coord_to_node_uid"""
         Road.__coord_to_node_uid = {(row['x'], row['y']): uid for uid, row in Road.__node_gdf.iterrows()}
+
+
 
     # endregion
 
