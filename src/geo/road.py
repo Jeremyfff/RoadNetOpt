@@ -451,8 +451,11 @@ class Road(Object):
             Road._clear_node(org_u)
             Road._clear_node(org_v)
         # handle cache
-        if road['cache'].any():
-            Road._flag_cached_graph_need_update = True
+        try:
+            if road['cache'].any():
+                Road._flag_cached_graph_need_update = True
+        except Exception as e:
+            print(e)
         return Road.get_road_by_uid(uid)
 
     @staticmethod

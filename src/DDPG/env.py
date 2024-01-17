@@ -8,11 +8,7 @@ from utils import io_utils
 from utils import RoadState, RoadLevel
 import shapely.geometry as geo
 import collections
-
-data = io_utils.load_data(r"try2.bin")
-Building.data_to_buildings(data)
-Region.data_to_regions(data)
-Road.data_to_roads(data)
+import time
 
 
 class RoadNet:
@@ -217,37 +213,41 @@ class RoadNet:
             return False
 
 
-import time
+if __name__ == '__main__':
+    data = io_utils.load_data(r"try2.bin")
+    Building.data_to_buildings(data)
+    Region.data_to_regions(data)
+    Road.data_to_roads(data)
 
-A = RoadNet()
-print(A.road_start)
-start = time.perf_counter()
-A.reset()
-A.render()
-done = np.zeros((A.nb_new_roads, 1))
-episode_return = 0
-for e in range(20):
-    # a = np.array([(0.3, -0.5), (0.4, 0.2), (0.2, 0)])
-    action_list = []
-    for i in range(A.nb_new_roads):
-        a = np.random.uniform(low=-1, high=1, size=(2,))
-        b = A.action_space_bound
-        c = A.action_space_boundMove
-        a_a = a * b + c
-        if done[i]:
-            a_a = np.zeros((1, 2))
-        action_list.append(a_a)
-    action = np.array(action_list).reshape(-1, 2)  # (3, 2)
-    next_state, rewards, done, Done = A.step(action)
-    state = next_state
-    episode_return += rewards
-    # print(action)
-    # print(done)
+    A = RoadNet()
+    print(A.road_start)
+    start = time.perf_counter()
+    A.reset()
     A.render()
-    print(Done)
-    if Done:
-        break
-end = time.perf_counter()
+    done = np.zeros((A.nb_new_roads, 1))
+    episode_return = 0
+    for e in range(20):
+        # a = np.array([(0.3, -0.5), (0.4, 0.2), (0.2, 0)])
+        action_list = []
+        for i in range(A.nb_new_roads):
+            a = np.random.uniform(low=-1, high=1, size=(2,))
+            b = A.action_space_bound
+            c = A.action_space_boundMove
+            a_a = a * b + c
+            if done[i]:
+                a_a = np.zeros((1, 2))
+            action_list.append(a_a)
+        action = np.array(action_list).reshape(-1, 2)  # (3, 2)
+        next_state, rewards, done, Done = A.step(action)
+        state = next_state
+        episode_return += rewards
+        # print(action)
+        # print(done)
+        A.render()
+        print(Done)
+        if Done:
+            break
+    end = time.perf_counter()
 
-# print(A.road_start_len)
-print('Running time: %s Seconds' % (end - start))
+    # print(A.road_start_len)
+    print('Running time: %s Seconds' % (end - start))
