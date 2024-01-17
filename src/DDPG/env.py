@@ -171,7 +171,7 @@ class RoadNet:
             now_voc = self.point_list[-1] - self.point_list[-2]
             dot = np.dot(ori_voc, now_voc.T)
             dot = np.diag(dot, k=0)
-            return dot < 0
+            return (dot < 0).reshape(-1, 1)
         else:
             return None
 
