@@ -116,14 +116,17 @@ def world_space_to_image_space(world_x, world_y, x_lim, y_lim, image_width, imag
 
     image_x = int((world_x - x_lim[0]) / (x_lim[1] - x_lim[0]) * image_width)
     image_y = int((world_y - y_lim[0]) / (y_lim[1] - y_lim[0]) * image_height)
+    image_y = image_height - image_y
     return image_x, image_y
 
 
 def image_space_to_world_space(image_x, image_y, x_lim, y_lim, image_width, image_height):
     assert image_width != 0
     assert image_height != 0
+    image_y = image_height - image_y
     world_x = (image_x / image_width) * (x_lim[1] - x_lim[0]) + x_lim[0]
     world_y = (image_y / image_height) * (y_lim[1] - y_lim[0]) + y_lim[0]
+
     return world_x, world_y
 
 

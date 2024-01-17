@@ -15,6 +15,7 @@ import pygame
 from PIL import Image
 from imgui.integrations.pygame import PygameRenderer
 import OpenGL.GL as gl
+<<<<<<< Updated upstream
 from OpenGL.GL import *
 import threading
 import sys
@@ -43,6 +44,19 @@ import graphic_module
 from graphic_module import GraphicManager
 from geo import Road, Building, Region
 >>>>>>> Stashed changes
+=======
+import ctypes
+import importlib
+import pyautogui
+
+import graphic_module
+
+from gui import icon_module
+from gui import common
+from gui import global_var as g
+from gui import imgui_style
+from gui import components as imgui_c
+>>>>>>> Stashed changes
 
 from utils import io_utils
 from utils import graphic_uitls
@@ -52,6 +66,7 @@ from utils import RoadLevel, RoadState, BuildingMovableType, BuildingStyle, Buil
 =======
     RegionType, RoadCluster, BuildingCluster, RegionCluster
 
+<<<<<<< Updated upstream
 from gui.icon_module import IconManager, Spinner
 
 <<<<<<< Updated upstream
@@ -63,17 +78,37 @@ from style_module import StyleManager, PlotStyle
 import ctypes
 # ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 print(f'import完成，耗时{time.time() - start_time}s')
+=======
+ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
+
+>>>>>>> Stashed changes
 """
 * Powered by DearImGui
 * Online Manual - https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
+
+* Wrapped by PyImgui
+* https://pyimgui.readthedocs.io/en/latest/
 """
 
 LEFT_WINDOW_WIDTH = 400
 BOTTOM_WINDOW_HEIGHT = 32
 
+<<<<<<< Updated upstream
 mDxfWindowOpened = False
 mInfoWindowOpened = True
 mLoggingWindowOpened = False
+=======
+def imgui_debug_window():
+    _, opened = imgui.begin('调试窗口', False)
+    imgui.text('package gui')
+    if imgui.button('reload all gui'):
+        importlib.reload(imgui_home_page)
+        importlib.reload(imgui_geo_page)
+        importlib.reload(imgui_training_page)
+        importlib.reload(imgui_tool_page)
+        importlib.reload(imgui_settings_page)
+        importlib.reload(imgui_main_window)
+>>>>>>> Stashed changes
 
 mImageWindowSize = (0, 0)
 mImageWindowPos = (0, 0)
@@ -81,6 +116,7 @@ mImageWindowInnerSize = (0, 0)
 mImageWindowInnerPos = (0, 0)
 mImageWindowMousePos = (0, 0)
 
+<<<<<<< Updated upstream
 mHoveringImageWindow = False
 mHoveringInfoSubWindow = False
 mHoveringDxfSubWindow = False
@@ -167,6 +203,22 @@ def imgui_main_window():
 
         # end trees
     imgui.pop_id()
+=======
+        importlib.reload(imgui_dxf_subwindow)
+        importlib.reload(imgui_info_subwindow)
+        importlib.reload(imgui_logging_subwindow)
+        importlib.reload(imgui_bottom_window)
+    if imgui.button('reload common.py'):
+        importlib.reload(common)
+    if imgui.button('reload components.py'):
+        importlib.reload(imgui_c)
+    if imgui.button('reload imgui_style.py'):
+        importlib.reload(imgui_style)
+    if imgui.button('reload icon_module.py'):
+        importlib.reload(icon_module)
+    imgui.text('package geo')
+    imgui.text('package utils')
+>>>>>>> Stashed changes
     imgui.end()
 
 
@@ -835,9 +887,18 @@ def init():
 
 if __name__ == "__main__":
     pygame.init()
+<<<<<<< Updated upstream
     size = (1920, 1080)
+=======
+
+    screen_width, screen_height = pyautogui.size()
+    g.INIT_WINDOW_WIDTH = screen_width if g.INIT_WINDOW_WIDTH > screen_width else g.INIT_WINDOW_WIDTH
+    g.INIT_WINDOW_HEIGHT = screen_height if g.INIT_WINDOW_HEIGHT > screen_height else g.INIT_WINDOW_HEIGHT
+    size = (g.INIT_WINDOW_WIDTH, g.INIT_WINDOW_HEIGHT)
+
+>>>>>>> Stashed changes
     pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
-    pygame.display.set_caption('road net opt window')
+    pygame.display.set_caption('路网织补工具 V0.1')
 
     imgui.create_context()
     impl = PygameRenderer()
@@ -867,6 +928,7 @@ if __name__ == "__main__":
     imgui.push_style_color(imgui.COLOR_TAB_HOVERED, 0.25, 0.61, 1.00, 0.80)
     imgui.push_style_color(imgui.COLOR_TAB_ACTIVE, 0.20, 0.41, 0.64, 1.00)
 
+<<<<<<< Updated upstream
     imgui.push_style_var(imgui.STYLE_WINDOW_ROUNDING, 8)
     imgui.push_style_var(imgui.STYLE_FRAME_ROUNDING, 4)
 
@@ -882,6 +944,13 @@ if __name__ == "__main__":
     graphic_manager = GraphicManager()
     icon_manager = IconManager()
     Spinner.init(True)
+=======
+    _ = graphic_module.GraphicManager()
+
+    imgui_style.init_font(impl)
+    imgui_style.init_style_var()
+    imgui_style.push_style(g.DARK_MODE)
+>>>>>>> Stashed changes
 
     lst_time = time.time()
     while True:

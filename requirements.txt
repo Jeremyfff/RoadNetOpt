@@ -5,11 +5,8 @@ matplotlib
 networkx
 numpy
 osmnx
-pettingzoo==1.24.2
 Pillow
-Pillow==10.1.0
 pygame
-scikit_learn==1.3.2
 scipy
 Shapely
 torch
@@ -17,3 +14,8 @@ ezdxf
 geopandas
 numba
 scikit-learn
+pandas
+tqdm
+pympler
+opencv-python
+pyautogui
