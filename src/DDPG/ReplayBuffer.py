@@ -10,7 +10,7 @@ class ReplayBuffer:
     # 在队列中添加数据
     def add(self, state, action, reward, next_state, done, Done):
         # 以list类型保存
-        self.buffer.append((state, action, reward, next_state, done, Done))
+        self.buffer.append((state.transpose((2, 0, 1)), action, reward, next_state.transpose((2, 0, 1)), done, Done))
 
     # 在队列中随机取样batch_size组数据
     def sample(self, batch_size):
