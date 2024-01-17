@@ -54,8 +54,6 @@ def push_dark():
     g.DARK_MODE = True
 
 
-
-
 def push_light():
     imgui.style_colors_light()
 
@@ -66,5 +64,3 @@ def push_light():
     pygame.display.set_icon(icon)
 
     g.DARK_MODE = False
-
-
