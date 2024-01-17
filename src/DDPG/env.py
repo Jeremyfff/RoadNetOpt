@@ -7,6 +7,7 @@ from utils.graphic_uitls import plot_as_array
 from utils import io_utils
 from utils import RoadState, RoadLevel
 import shapely.geometry as geo
+import collections
 
 data = io_utils.load_data(r"try2.bin")
 Building.data_to_buildings(data)
@@ -52,7 +53,7 @@ class RoadNet:
     def reset(self):
         """初始化新的道路，分随机初始化、选定道路初始化"""
         self.episode_step = 0
-        self.point_list = []
+        self.point_list = collections.deque(maxlen=3)
         if not self.choice:
             point = [self.check_line_and_out_random_point(l, self.distance) for l in self.road_start]
             points_array = np.concatenate(point, axis=0)
