@@ -38,9 +38,12 @@ def update_main_graphic():
 def handle_common_keyboard_interation():
     if imgui.is_key_pressed(imgui.KEY_ESCAPE):
         clear_selected_roads_and_update_graphic()
-    if imgui.is_key_pressed(imgui.KEY_DELETE):
+    if imgui.is_key_pressed(imgui.KEY_BACKSPACE):
         GraphicManager.instance.main_texture.clear_cache()
-
+    if imgui.is_key_pressed(imgui.KEY_DELETE):
+        for road in g.mSelectedRoads.values():
+            Road.delete_road_by_uid(road['uid'])
+        clear_selected_roads_and_update_graphic()
 def handle_normal_keyboard_interation():
     pass
 

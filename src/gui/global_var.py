@@ -31,8 +31,12 @@ mHoveringMainTextureSubWindow = False
 mHoveringDxfSubWindow = False
 
 mShowingMainTextureWindow = False
-mImageSize = (0, 0)
-mMousePosInImage = (0, 0)
+
+mImageSize = (0, 0)  # 纹理大小
+mMousePosInImage = (0, 0)  # 鼠标位置（纹理空间
+
+mImageWindowInnerSize = (0, 0)  # 图像控件的大小（屏幕空间
+mImageWindowInnerPos = (0, 0)  # 图片控件在窗口的绝对位置（屏幕空间
 
 mAddNodeMode = False
 mCurrentEditingRoad = None

@@ -16,12 +16,14 @@ mCurrentRegionDisplayOption = 0
 mPinSelectEditor = False
 mPinSelectEditorPos: Union[tuple, None] = None
 print('main_texture_toolbox subwindow loaded')
-def show(pos):
+
+
+def show():
     global mCurrentRoadDisplayOption, mCurrentBuildingDisplayOption, \
         mCurrentRegionDisplayOption, mPinSelectEditor, mPinSelectEditorPos
     tool_set_button_num = 3  # 在这里更改按钮个数
 
-    imgui.set_next_window_position(*pos)
+    imgui.set_next_window_position(*g.mImageWindowInnerPos)
     imgui.set_next_window_size(g.DEFAULT_IMAGE_BUTTON_WIDTH + 22,
                                tool_set_button_num * (g.DEFAULT_IMAGE_BUTTON_HEIGHT + 22))
     flags = imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_COLLAPSE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE
@@ -65,7 +67,7 @@ def show(pos):
         if mPinSelectEditorPos is not None:
             imgui.set_next_window_position(mPinSelectEditorPos[0], mPinSelectEditorPos[1])
             mPinSelectEditorPos = None
-        expanded, mPinSelectEditor = imgui.begin('select_editor_subwindow',True, imgui.WINDOW_NO_TITLE_BAR )
+        expanded, mPinSelectEditor = imgui.begin('select_editor_subwindow', True, imgui.WINDOW_NO_TITLE_BAR)
         imgui_select_editor_content()
         imgui.end()
     imgui.end()

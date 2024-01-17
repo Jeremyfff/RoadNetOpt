@@ -104,7 +104,7 @@ class MainGraphTexture(GraphicTexture):
         self.enable_render_roads = True
         self.enable_render_buildings = False
         self.enable_render_regions = False
-        self.enable_render_nodes = True
+        self.enable_render_nodes = False
 
         self._road_cluster = RoadCluster()
         self._building_cluster = BuildingCluster()

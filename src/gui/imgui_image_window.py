@@ -11,8 +11,7 @@ from gui import imgui_main_texture_toolbox_subwindow
 
 mImageWindowSize = (0, 0)
 mImageWindowPos = (0, 0)
-mImageWindowInnerSize = (0, 0)
-mImageWindowInnerPos = (0, 0)
+
 mImageWindowMousePos = (0, 0)
 
 
@@ -21,8 +20,8 @@ mTextureInfo = {}
 
 print('image window loaded')
 def show():
-    global mImageWindowSize, mImageWindowPos, mImageWindowInnerSize, \
-        mImageWindowInnerPos, mImageWindowMousePos
+    global mImageWindowSize, mImageWindowPos, \
+        mImageWindowMousePos
     screen_width, screen_height = pygame.display.get_window_size()
     flags = imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_COLLAPSE | imgui.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS
     imgui.set_next_window_size(screen_width - g.LEFT_WINDOW_WIDTH, screen_height - g.BOTTOM_WINDOW_HEIGHT)
@@ -30,11 +29,11 @@ def show():
     imgui.begin("image window", False, flags=flags)
     mImageWindowPos = (int(imgui.get_window_position()[0]), int(imgui.get_window_position()[1]))
     mImageWindowSize = (int(imgui.get_window_size()[0]), int(imgui.get_window_size()[1]))
-    mImageWindowInnerSize = (int(mImageWindowSize[0] - 16), int(mImageWindowSize[1] - g.FONT_SIZE - 18))
-    g.mImageSize = (int(mImageWindowInnerSize[0] / g.mTextureScale), int(mImageWindowInnerSize[1] / g.mTextureScale))
-    mImageWindowInnerPos = (int(mImageWindowPos[0] + 8), int(mImageWindowPos[1] + g.FONT_SIZE + 18))
+    g.mImageWindowInnerSize = (int(mImageWindowSize[0] - 16), int(mImageWindowSize[1] - g.FONT_SIZE - 18))
+    g.mImageSize = (int(g.mImageWindowInnerSize[0] / g.mTextureScale), int(g.mImageWindowInnerSize[1] / g.mTextureScale))
+    g.mImageWindowInnerPos = (int(mImageWindowPos[0] + 8), int(mImageWindowPos[1] + g.FONT_SIZE + 18))
     vec1 = (int(imgui.get_mouse_position()[0]), int(imgui.get_mouse_position()[1]))
-    vec2 = mImageWindowInnerPos
+    vec2 = g.mImageWindowInnerPos
     mImageWindowMousePos = (vec1[0] - vec2[0], vec1[1] - vec2[1])
     g.mMousePosInImage = (int(mImageWindowMousePos[0] / g.mTextureScale), int(mImageWindowMousePos[1] / g.mTextureScale))
     g.mHoveringImageWindow = imgui_c.is_hovering_window()
@@ -50,7 +49,7 @@ def show():
                 imgui.image(texture.texture_id, texture.width * g.mTextureScale, texture.height * g.mTextureScale)
                 if texture.name == 'main':
                     g.mShowingMainTextureWindow = True
-                    imgui_main_texture_toolbox_subwindow.show(mImageWindowInnerPos)
+                    imgui_main_texture_toolbox_subwindow.show()
                 else:
                     g.mShowingMainTextureWindow = False
                 mTextureInfo['last updated'] = str(texture.last_update_time)
