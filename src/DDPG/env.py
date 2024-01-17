@@ -16,7 +16,7 @@ import examples as ex
 import geopandas as gpd
 import shapely.geometry as geo
 
-data = io_utils.load_data(r"C:\Users\Wen Wu\Desktop\try2.bin")
+data = io_utils.load_data(r"try2.bin")
 Building.data_to_buildings(data)
 Region.data_to_regions(data)
 Road.data_to_roads(data)
@@ -233,3 +233,4 @@ end = time.perf_counter()
 
 # print(A.road_start_len)
 print('Running time: %s Seconds'%(end-start))
+
