@@ -128,7 +128,7 @@ class MainGraphTexture(GraphicTexture):
         building_changed = False
         region_changed = False
         # roads
-        IconManager.instance.imgui_icon('road-fill')
+        IconManager.imgui_icon('road-fill')
         imgui.same_line()
         clicked, self.enable_render_roads = imgui.checkbox('render roads', True)
         if clicked:
@@ -145,7 +145,7 @@ class MainGraphTexture(GraphicTexture):
             road_changed |= self._road_cluster.show_imgui_cluster_editor_button()
             imgui.unindent()
         # buildings
-        IconManager.instance.imgui_icon('building-fill')
+        IconManager.imgui_icon('building-fill')
         imgui.same_line()
         clicked, self.enable_render_buildings = imgui.checkbox('render buildings', self.enable_render_buildings)
         if clicked:
@@ -155,7 +155,7 @@ class MainGraphTexture(GraphicTexture):
             building_changed |= self._building_cluster.show_imgui_cluster_editor_button()
             imgui.unindent()
         # regions
-        IconManager.instance.imgui_icon('polygon')
+        IconManager.imgui_icon('polygon')
         imgui.same_line()
         clicked, self.enable_render_regions = imgui.checkbox('render regions', self.enable_render_regions)
         if clicked:
@@ -166,7 +166,7 @@ class MainGraphTexture(GraphicTexture):
             imgui.unindent()
 
         # nodes
-        IconManager.instance.imgui_icon('vector-polygon')
+        IconManager.imgui_icon('vector-polygon')
         imgui.same_line()
         clicked, self.enable_render_nodes = imgui.checkbox('render nodes', self.enable_render_nodes)
         if clicked:

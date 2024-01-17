@@ -31,7 +31,7 @@ def show():
     g.mHoveringMainTextureSubWindow = imgui_c.is_hovering_window()
 
     # 显示样式设置
-    if imgui.image_button(IconManager.instance.icons['paint-fill'], g.DEFAULT_IMAGE_BUTTON_WIDTH,
+    if imgui.image_button(IconManager.icons['paint-fill'], g.DEFAULT_IMAGE_BUTTON_WIDTH,
                           g.DEFAULT_IMAGE_BUTTON_HEIGHT):
         imgui.open_popup('display_style_editor')
     imgui_c.tooltip('显示样式设置')
@@ -45,7 +45,7 @@ def show():
         imgui.end_popup()
 
     # 显示图层设置
-    if imgui.image_button(IconManager.instance.icons['stack-fill'], g.DEFAULT_IMAGE_BUTTON_WIDTH,
+    if imgui.image_button(IconManager.icons['stack-fill'], g.DEFAULT_IMAGE_BUTTON_WIDTH,
                           g.DEFAULT_IMAGE_BUTTON_HEIGHT):
         imgui.open_popup('display_layer_editor')
     imgui_c.tooltip('显示图层设置')
@@ -55,7 +55,7 @@ def show():
         imgui.end_popup()
 
     # 选择工具
-    if imgui.image_button(IconManager.instance.icons['cursor-fill'], g.DEFAULT_IMAGE_BUTTON_WIDTH,
+    if imgui.image_button(IconManager.icons['cursor-fill'], g.DEFAULT_IMAGE_BUTTON_WIDTH,
                           g.DEFAULT_IMAGE_BUTTON_HEIGHT):
         imgui.open_popup('select_editor')
     imgui_c.tooltip('显示选择详情')
@@ -77,7 +77,7 @@ def imgui_select_editor_content():
     global mPinSelectEditor, mPinSelectEditorPos
 
     icon_name = 'pushpin-2-fill' if mPinSelectEditor else 'pushpin-2-line'
-    if imgui.image_button(IconManager.instance.icons[icon_name], g.DEFAULT_IMAGE_BUTTON_WIDTH,
+    if imgui.image_button(IconManager.icons[icon_name], g.DEFAULT_IMAGE_BUTTON_WIDTH,
                           g.DEFAULT_IMAGE_BUTTON_HEIGHT):
         mPinSelectEditor = not mPinSelectEditor
         if mPinSelectEditor:

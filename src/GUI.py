@@ -29,17 +29,19 @@ from gui import imgui_training_page
 from gui import imgui_tool_page
 from gui import imgui_settings_page
 
-
 ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 
 """
 * Powered by DearImGui
 * Online Manual - https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
+
+* Wrapped by PyImgui
+* https://pyimgui.readthedocs.io/en/latest/
 """
 
 
 def imgui_debug_window():
-    expanded, opened = imgui.begin('调试窗口', False)
+    _, opened = imgui.begin('调试窗口', False)
     imgui.text('package gui')
     if imgui.button('reload all gui'):
         importlib.reload(imgui_home_page)
@@ -79,10 +81,6 @@ def main():
 
     pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
     pygame.display.set_caption('路网织补工具 V0.1')
-    # 加载图标
-    icon = pygame.image.load('../textures/dark/road-fill.png')  # 用您实际的图标文件名替换'icon.png'
-    pygame.display.set_icon(icon)
-
 
     imgui.create_context()
     impl = PygameRenderer()
@@ -90,11 +88,11 @@ def main():
     io = imgui.get_io()
     io.display_size = size
 
-    imgui_style.init_font(impl)
-    imgui_style.push_dark()
+    _ = graphic_module.GraphicManager()
 
-    graphic_manager =graphic_module.GraphicManager()
-    icon_manager = icon_module.IconManager()
+    imgui_style.init_font(impl)
+    imgui_style.init_style_var()
+    imgui_style.push_style(g.DARK_MODE)
 
     lst_time = time.time()
     while True:
