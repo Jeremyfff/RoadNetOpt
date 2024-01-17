@@ -8,7 +8,7 @@ from utils import io_utils
 from utils import RoadState, RoadLevel
 import shapely.geometry as geo
 
-data = io_utils.load_data(r"C:\Users\Wen Wu\Desktop\try2.bin")
+data = io_utils.load_data(r"try2.bin")
 Building.data_to_buildings(data)
 Region.data_to_regions(data)
 Road.data_to_roads(data)
