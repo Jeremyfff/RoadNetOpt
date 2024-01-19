@@ -2,7 +2,6 @@ import math
 import traceback
 import uuid
 from typing import Union
-
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -106,6 +105,7 @@ class RoadNet:
         return np.vstack(last_points)
 
     def reward(self):
+        # 此处未修改
         buildings = Building.get_all_buildings()
         regions = Region.get_all_regions()
         world_x_range = (-100, 450 * 1.2)
@@ -174,6 +174,7 @@ mCurrentOptimizedAgentNum = 0  # 仅限顺序模式
 
 
 def synchronous_mode_init(num_agents):
+    """同步模式，若干agent同时跑"""
     global mRoadNet
     _ = io_utils.load_data('../data/VirtualEnv/try2.bin')
     Building.data_to_buildings(_)
@@ -222,6 +223,7 @@ def synchronous_mode_step(_) -> bool:
 
 
 def sequential_mode_init(num_agents):
+    """顺序模式， agent一个一个跑"""
     global mRoadNet, mTargetOptimizedAgentNum
     _ = io_utils.load_data('../data/VirtualEnv/try2.bin')
     Building.data_to_buildings(_)
