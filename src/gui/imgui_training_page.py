@@ -12,7 +12,7 @@ from geo import Road, Building, Region
 from utils import RoadLevel, RoadState
 from utils import io_utils, graphic_uitls
 from gui.animation_module import Animation
-from DDPG import env
+from DDPG import env2 as env
 
 print('training page loaded')
 
@@ -245,7 +245,7 @@ def road_net_play_func(step: int) -> bool:
             a_a = a * b + c
             if mRoadNetDone[i]:
                 a_a = np.zeros((1, 2))
-            action_list.append(a_a)
+            action_list.append(a_a) 
         action = np.array(action_list).reshape(-1, 2)  # (3, 2)
         next_state, rewards, done, Done = mRoadNet.step(action)
         mRoadNetState = next_state
