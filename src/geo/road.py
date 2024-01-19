@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import time
 import pandas as pd
 from shapely.geometry import LineString, Point
-from shapely.ops import split
+from shapely.ops import split, nearest_points
+
 import networkx as nx
 from geo import Object
 from utils import RoadLevel, RoadState, point_utils, road_utils, RoadCluster
@@ -471,16 +472,29 @@ class Road(Object):
             return
 
         cut_point = geo.interpolate(distance, normalized)
-        new_geos = list(split(geo, cut_point).geoms)
+
+        _pt1 = list(cut_point.coords)[0]
+        _pt2 = list(geo.interpolate(distance+1e-5, normalized).coords)[0]
+        _dx = _pt2[0] - _pt1[0]
+        _dy = _pt2[1] - _pt1[1]
+        _v = (-_dy, _dx)
+        _v_pt1 = (_pt1[0] + _v[0], _pt1[1] + _v[1])
+        _v_pt2 = (_pt1[0] - _v[0], _pt1[1] - _v[1])
+        cut_line = LineString([_v_pt1, _v_pt2])
+        new_geos = list(split(geo, cut_line).geoms)
         if len(new_geos) == 1:
+            logging.warning('split failed')
             return np.array(list(cut_point.coords))
         assert len(new_geos) == 2
         Road._add_road_by_geometry(new_geos[0], level=level, state=state)
         Road._add_road_by_geometry(new_geos[1], level=level, state=state)
         Road.delete_road(road, update_nodes_immediately)  # org nodes will be handled here
         # handle cache
-        if road['cache']:
-            Road._flag_cached_graph_need_update = True
+        try:
+            if road['cache']:
+                Road._flag_cached_graph_need_update = True
+        except Exception as e:
+            pass
         return np.array(list(cut_point.coords))
 
     @staticmethod
