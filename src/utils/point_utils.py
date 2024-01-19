@@ -77,3 +77,11 @@ def v_rotate_vectors(vec):
     rotation_matrix = np.array([[0, -1], [1, 0]])
     rotated_vec = np.dot(vec, rotation_matrix)
     return rotated_vec
+
+def vector_from_points(src, dst):
+    dx = dst[0] - src[0]
+    dy = dst[1] - src[1]
+    return (dx, dy)
+
+def vector_dot(vec1, vec2):
+    return vec1[0] * vec2[0] + vec1[1] * vec2[1]

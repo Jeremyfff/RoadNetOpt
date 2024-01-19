@@ -29,6 +29,7 @@ from gui import imgui_training_page
 from gui import imgui_tool_page
 from gui import imgui_settings_page
 
+from DDPG import env2 as env
 ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 
 """
@@ -68,6 +69,9 @@ def imgui_debug_window():
         importlib.reload(icon_module)
     imgui.text('package geo')
     imgui.text('package utils')
+    imgui.text('package DDPG')
+    if imgui.button('reload env'):
+        importlib.reload(env)
     imgui.end()
 
 
@@ -104,7 +108,7 @@ def main():
         impl.process_inputs()
         # update graphic
 
-        common.update_main_graphic()
+
 
         # draw imgui windows
         imgui.new_frame()

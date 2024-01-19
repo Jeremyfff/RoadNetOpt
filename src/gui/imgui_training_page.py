@@ -4,6 +4,7 @@ import typing
 import imgui
 import numpy as np
 import pandas as pd
+import traceback
 
 from graphic_module import GraphicManager
 from gui import global_var as g
@@ -24,18 +25,16 @@ mRoadPtSeqData: list = []
 mRoadAnimationData: dict = {}
 mRoadGrowAnimation: Animation = Animation.blank()
 
-mRoadNet: typing.Union[env.RoadNet, None] = None
-mRoadNetDone: typing.Union[np.ndarray, None] = None
-mRoadNetEpisodeReturn: float = 0
-mRoadNetState = None
 mRoadNetAnimation: Animation = Animation.blank()
-mRoadNetAnimationTimeGap = 0.5
+mRoadNetAnimationTimeGap = 0.1
+mSyncMode = True
+mNumAgents = 3
 
 
 def show():
     global mRoadInterpolateValue, mNewRoads, mRoadPtSeqData, mRoadAnimationData, mRoadGrowAnimation, \
         mSelectStartPointMode, \
-        mRoadNet, mRoadNetDone, mRoadNetEpisodeReturn, mRoadNetAnimation, mRoadNetAnimationTimeGap
+        mRoadNetAnimation, mRoadNetAnimationTimeGap, mSyncMode, mNumAgents
     imgui.push_id('agent_op')
 
     if imgui.tree_node('快捷工具'):
@@ -57,22 +56,32 @@ def show():
         imgui.tree_pop()
 
     if imgui.tree_node('训练工具', flags=imgui.TREE_NODE_DEFAULT_OPEN):
+        _, mSyncMode = imgui.checkbox('sync mode', mSyncMode)
         _, mRoadNetAnimationTimeGap = imgui.slider_float('animation time gap', mRoadNetAnimationTimeGap, 0, 1)
-        if imgui.button('Load Data'):
-            _ = io_utils.load_data('../data/VirtualEnv/try2.bin')
-            Building.data_to_buildings(_)
-            Region.data_to_regions(_)
-            Road.data_to_roads(_)
+        _, mNumAgents = imgui.slider_int('num agents', mNumAgents, 1, 10)
+        if imgui.button('Init RoadNet'):
+            try:
+                if mSyncMode:
+                    env.synchronous_mode_init(mNumAgents)
 
-        if imgui.button('Create RoadNet'):
-            mRoadNet = env.RoadNet()
-            mRoadNetAnimation = Animation(body_func=road_net_play_func,
-                                          reset_func=road_net_reset_func,
-                                          time_gap=mRoadNetAnimationTimeGap)
-            mRoadNetAnimation.reset()
+                    mRoadNetAnimation = Animation(body_func=env.synchronous_mode_step,
+                                                  reset_func=env.synchronous_mode_reset,
+                                                  time_gap=mRoadNetAnimationTimeGap)
+                else:
+                    env.sequential_mode_init(mNumAgents)
+                    mRoadNetAnimation = Animation(body_func=env.sequential_mode_step,
+                                                  reset_func=env.sequential_mode_reset,
+                                                  time_gap=mRoadNetAnimationTimeGap)
+                mRoadNetAnimation.reset()
+            except Exception as e:
+                print(e)
+                traceback.print_exc()
 
         if imgui.button('Play Animation'):
             mRoadNetAnimation.start()
+        imgui.same_line()
+        if imgui.button('step'):
+            mRoadNetAnimation.step()
         if imgui.button('Reset Animation'):
             mRoadNetAnimation.reset()
         mRoadNetAnimation.show()
@@ -221,37 +230,48 @@ def road_grow_animation_body_func(step: int) -> bool:
 
     except Exception as e:
         print(e)
+        traceback.print_exc()
         return True
 
 
 def road_net_reset_func():
-    global mRoadNet, mRoadNetDone, mRoadNetEpisodeReturn
-    mRoadNet.reset()
-    mRoadNetDone = np.zeros((mRoadNet.nb_new_roads, 1))
-    mRoadNetEpisodeReturn = 0
-    GraphicManager.instance.bilt_to('RoadNet', mRoadNet.return_image_observation())
-    print('road net reset')
-
-
-def road_net_play_func(step: int) -> bool:
-    global mRoadNet, mRoadNetDone, mRoadNetEpisodeReturn, mRoadNetState
+    global mRoadNet, mRewardSum
     try:
-        _ = step
-        action_list = []
-        for i in range(mRoadNet.nb_new_roads):
-            a = np.random.uniform(low=-1, high=1, size=(2,))
-            b = mRoadNet.action_space_bound
-            c = mRoadNet.action_space_boundMove
-            a_a = a * b + c
-            if mRoadNetDone[i]:
-                a_a = np.zeros((1, 2))
-            action_list.append(a_a) 
-        action = np.array(action_list).reshape(-1, 2)  # (3, 2)
-        next_state, rewards, done, Done = mRoadNet.step(action)
-        mRoadNetState = next_state
-        mRoadNetEpisodeReturn += rewards
-        GraphicManager.instance.bilt_to('RoadNet', mRoadNet.return_image_observation())
-        return Done
+        mRoadNet.reset()
+        mRoadNet.render()
+        mRewardSum = 0
+        print('road net reset')
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
 
-    except IndexError:
+
+def road_net_step_func(frame_idx: int) -> bool:
+    global mRoadNet, mRewardSum
+    try:
+        _ = frame_idx
+        print(f'当前轮次{mRoadNet.episode_step}======================')
+        action_list = []
+        b = mRoadNet.action_space_bound
+        c = mRoadNet.action_space_boundMove
+        for i in range(len(mRoadNet.agents)):
+            a = np.random.uniform(low=-1, high=1, size=(2,))
+            _action = a * b + c
+            action_list.append(_action)
+        action = np.vstack(action_list)
+        print(f'action {action}')
+        next_state, reward, done, all_done = mRoadNet.step(action)
+        mRewardSum += reward
+
+        print(f'当前奖励 {reward}')
+        print(f'当前累计奖励 {mRewardSum}')
+        print(f'单路是否结束 {list(done.values())}')
+        print(f'总体路网是否结束 {all_done}')
+        print('==================================')
+        mRoadNet.render()
+        return all_done
+
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
         return True

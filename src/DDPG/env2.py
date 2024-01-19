@@ -1,353 +1,274 @@
-import random
 import math
-import cv2
+import traceback
+import uuid
+from typing import Union
+
 import numpy as np
+import pandas as pd
+import geopandas as gpd
 from geo import Road, Building, Region
 from utils.graphic_uitls import plot_as_array
-from utils import io_utils
+from utils import point_utils, io_utils
 from utils import RoadState, RoadLevel
-import shapely.geometry as geo
-import collections
-import time
+from graphic_module import GraphicManager
+from DDPG.reward_agent import RewardAgent
+
+print('env2 loaded')
 
 
 class RoadNet:
-    simple_agent = False
-    if simple_agent:
-        nb_new_roads = 1
-    else:
-        nb_new_roads = 3
-    distance = 80
-    if_no_choice_roads = False
-    choice = False
-    get_image = False
-    if_render = False
-    # 智能体能活动的画布区域坐标x 在（-40,500）, 坐标y在（-50,500）
-    road_net_x_region = [-40, 500]
-    road_net_y_region = [-50, 500]
+    def __init__(self, num_agents, max_episode_step=200, region_min=(-40, -50), region_max=(500, 500)):
+        # 将之前的静态变量变为在RoadNet初始化时可以设置
+        self.num_agents = num_agents  # 在RoadNet层面无需区分是多个一起还是一个一个，在后面使用不同的reset策略即可
+        self.max_episode_step = max_episode_step  # 在这里限制最大步数
+        self.region_min = region_min  # 即原来的road_net_x_region 和 road_net_y_region
+        self.region_max = region_max
 
-    action_space_bound = np.array([(math.pi, 30)])  # [((-π~π), (-20~20))]
-    action_space_boundMove = np.array([(0, 30)])  # [((-π~π), (0~60))]
-    observation_space_shape = (128, 128, 3)  # 图像格式
+        self.action_space_bound = np.array([(math.pi, 30)])  # [((-π~π), (-30~30))]
+        self.action_space_boundMove = np.array([(0, 30)])  # [((-π~π), (0~60))]
+        self.observation_space_shape = (512, 512, 4)  # [height, width, channel]
 
-    # uid = '74b974e6-0781-4030-9ad5-184925cc79d1'
-    # index = len(current_road_net)
-    # i = np.random.randint(0, index)
-    # print(i)
-    # print(road_start)
-    def __init__(self):
-        self.current_road_net = Road.get_all_roads()
-        cond = self.current_road_net
-        self.road_start = cond['geometry'].tolist()
-        self.road_start_len = len(self.road_start)
+        self.episode_step: int = 0  # 当前步数
+        self.raw_roads: gpd.geodataframe = Road.get_all_roads()  # 保存原有道路， 分裂后的新道路不在其中
+        self.agents: dict[uuid.UUID: pd.Series] = {}  # 所有的新的道路智能体
+        self.agents_done: dict[uuid.UUID, bool] = {}  # 个体是否完成
 
-    def check_line_and_out_random_distance(self, line, distance):
-        """判断哪些路可以设置新的路口， 返回bool索引表"""
-        if line.length > 2 * distance:
-            new_distance = random.uniform(distance, line.length - distance)
-            return np.array([new_distance])
-        else:
-            return np.array([np.nan])
-
-    def out_start_points_by_index(self, index, distance_array):
-        road = self.current_road_net.iloc[index]
-        road = Road.get_road_by_uid(road['uid'])
-        distance = distance_array[index]
-        print(f'before split {len(Road.get_all_roads())}')
-        point = Road.split_road(road, distance, normalized=False, update_nodes_immediately=True)
-        print(f'after split {len(Road.get_all_roads())}')
-
-        return point
+        Road.cache()  # 保存当前路网状态，以备复原
 
     def reset(self):
-        """初始化新的道路，分随机初始化、选定道路初始化"""
-        self.episode_step = 0
-        self.point_list = collections.deque(maxlen=3)
-        if not self.choice:
-            new_distance = [self.check_line_and_out_random_distance(l, self.distance) for l in self.road_start]
-            new_distance_array = np.concatenate(new_distance, axis=0)  # distance索引表（含nan值）
-            new_distance_bool = ~np.isnan(new_distance_array)
-            new_distance_index = np.argwhere(new_distance_bool).reshape(-1)  # 可以选择的distance index 索引表
-            list_points = []
-            # print(f'当前可选道路个数{new_distance_index.shape[0]}')
-            if self.nb_new_roads < new_distance_index.shape[0]:
-                choice_index = np.random.choice(new_distance_index, size=self.nb_new_roads, replace=False)
-                for i in choice_index:
-                    point = self.out_start_points_by_index(i, new_distance_array)
-                    list_points.append(point)
-            else:
-                for i in new_distance_index:
-                    point = self.out_start_points_by_index(i, new_distance_array)
-                    list_points.append(point)
-            for point in list_points:
-                # Road.add_road_by_coords(coords=point, level=RoadLevel.BRANCH,
-                #                         state=RoadState.OPTIMIZING)
-                pass
-            self.last_points = np.concatenate(list_points, axis=0)
-            self.point_list.append(self.last_points)
-            # print(Road.get_all_roads())
-        else:
-            pass
+        """初始化新的道路，分随机初始化、选定道路初始化(TODO)"""
+        Road.restore()  # 复原路网
+        self.episode_step = 0  # 重置步数
+        self.clear_and_spawn_agents()  # 生成智能体
+        return self.get_image_observation()
 
-    def simple_agent_reset(self):
-        self.point_list = collections.deque(maxlen=3)
-        self.current_road_net = Road.get_all_roads()
-        self.road_start = Road.get_all_roads()['geometry'].tolist()
-        self.road_start_len = len(self.road_start)
-        # print(f'当前道路个数{self.road_start_len}')
-        new_distance = [self.check_line_and_out_random_distance(l, self.distance) for l in self.road_start]
-        new_distance_array = np.concatenate(new_distance, axis=0)  # distance索引表（含nan值）
-        new_distance_bool = ~np.isnan(new_distance_array)
-        new_distance_index = np.argwhere(new_distance_bool).reshape(-1)  # 可以选择的distance index 索引表
-        list_points = []
-        # print(f'当前可选道路个数{new_distance_index.shape[0]}')
-        if self.nb_new_roads < new_distance_index.shape[0]:
-            choice_index = np.random.choice(new_distance_index, size=self.nb_new_roads, replace=False)
-            for i in choice_index:
-                point = self.out_start_points_by_index(i, new_distance_array)
-                list_points.append(point)
-            for point in list_points:
-                Road.add_road_by_coords(coords=point, level=RoadLevel.BRANCH,
-                                        state=RoadState.OPTIMIZING)
-        else:
-            self.if_no_choice_roads = True
-        self.last_points = np.concatenate(list_points, axis=0)
-        self.point_list.append(self.last_points)
+    def clear_and_spawn_agents(self):
+        self.agents = {}
+        self.agents_done = {}
+        selected_road_uids = set()
+        count = 0  # 这个变量是统计while 循环的次数的，防止始终找不到合适的路而陷入无限循环
+        while len(self.agents) < self.num_agents:
+            count += 1
+            if count > 1000: break  # 如果很多轮依旧找不满合适的路，则停止
+            random_road = self.raw_roads.sample().iloc[0]  # 在原始的路网中随机一条路
+            if random_road['uid'] in selected_road_uids: continue  # 如果随机到的路已经被选中了，则重新选
+            if random_road['uid'] not in Road.get_all_roads()['uid'].values: continue
+            selected_road_uids.add(random_road['uid'])  # 将随机到的路加入已被选择的路的set
+            spawn_point = Road.split_road_by_random_position(random_road)  # 在路上随机一个点并尝试分裂
+            if spawn_point is None: continue  # 如果找不到符合路网间距规范的点，则重新选一条路
 
-    def return_image_observation(self):
+            uid = Road.add_road_by_coords(spawn_point, RoadLevel.BRANCH, RoadState.OPTIMIZING)  # 生成新路
+            new_road = Road.get_road_by_uid(uid)
+
+            self.agents[uid] = new_road  # 将新路加入self.agents
+            self.agents_done[uid] = False  # 初始默认done的状态为False
+
+    def get_image_observation(self):
         """返回状态，为 图像 格式"""
-        roads = Road.get_all_roads()
-        buildings = Building.get_all_buildings()
-        regions = Region.get_all_regions()
-
-        list_all = [roads, buildings, regions]
-        image_data, ax = plot_as_array(list_all, 512, 512,
-                                       y_lim=(-100 * 1.2, 400 * 1.2), x_lim=(-100, 450 * 1.2),
-                                       transparent=True, antialiased=False)
+        image_data, ax = plot_as_array(
+            gdf=[Road.get_all_roads(), Building.get_all_buildings(), Region.get_all_regions()],
+            width=self.observation_space_shape[1],
+            height=self.observation_space_shape[0],
+            y_lim=(-100 * 1.2, 400 * 1.2),
+            x_lim=(-100, 450 * 1.2),
+            transparent=True, antialiased=False)
         # print(image_data.shape)
         return image_data.numpy()
 
     def render(self):
-        # pil_image = Image.fromarray(self.return_image_observation())
-        # 显示图像
-        cv2.imshow('RoadNetOpt', self.return_image_observation())
-        cv2.waitKey()
+        GraphicManager.instance.bilt_to('RoadNet', self.get_image_observation())
 
     def step(self, action):
-        """返回new_observation, rewards, done, Done"""
-        ori_points = self.last_points
+        """返回new_observation, rewards, done, all_done"""
         self.episode_step += 1
-        if self.simple_agent:
-            print(f'现在是第 {self.episode_step} 步')
-        else:
-            print(f'现在是第 {self.episode_step} 轮')
-        # print(points)
-        i = action
-        x_move = np.reshape(np.cos(i[:, 0]) * i[:, 1], (-1, 1))
-        y_move = np.reshape(np.sin(i[:, 0]) * i[:, 1], (-1, 1))
-        move = np.concatenate((x_move, y_move), axis=1)
-        self.last_points = ori_points + move
-        self.point_list.append(self.last_points)
-
+        dx = np.reshape(np.cos(action[:, 0]) * action[:, 1], (-1, 1))
+        dy = np.reshape(np.sin(action[:, 0]) * action[:, 1], (-1, 1))
+        moves = np.concatenate((dx, dy), axis=1)
         # 给每条路添加新的 最末点， 以此使路网生长
-        for i in range(0, self.nb_new_roads):
-            agent_road = Road.get_all_roads().iloc[i - self.nb_new_roads]
-            my_road = Road.add_point_to_road(agent_road, point=self.last_points[i].reshape((1, 2)))
-        # 返回下一时刻状态
-        new_observation = self.return_image_observation()
-        # 根据下一时刻状态，判断该动作下获得的奖励
-        # reward = np.zeros((self.nb_new_roads, 1))
-        # 判断单体路生长是否结束
-        print(f'是否走了回头路{self.if_the_way_back()}')
-        done = self.done()
-        reward = self.reward()
-        # 判断路网生长是否结束
-        if not self.simple_agent:
-            Done = self.Done(done)
-        else:
-            Done = self.simple_agent_Done()
+        for i, uid in enumerate(self.agents.keys()):
+            if self.agents_done[uid]: continue  # 如果该道路已经停止，则不再添加
+            lst_pt = Road.get_road_last_point(self.agents[uid])  # 获取道路的最后一个点
+            new_pt = lst_pt + moves[i].reshape(1, 2)  # 根据move计算新的点的位置
+            self.agents[uid] = Road.add_point_to_road(self.agents[uid], point=new_pt)  # 向道路添加点
 
-        if self.if_render:
-            self.render()
+        for i, uid in enumerate(self.agents.keys()):
+            self.agents_done[uid] = self._is_agent_done(uid)  # 计算每条路是否结束
 
-        return new_observation, reward, done, Done
+        new_observation, reward, done, all_done = self.get_image_observation(), \
+            self.reward(), self.agents_done, self._all_done()
+        return new_observation, reward, done, all_done
+
+    def _get_last_points(self):
+        """获取所有agent道路的最后一个点，返回[n, 2]形状的np array"""
+        last_points = []
+        for i, road in enumerate(self.agents.values()):
+            last_points.append(Road.get_road_last_point(road))
+        return np.vstack(last_points)
 
     def reward(self):
-        # print(self.last_points)
-        # return np.zeros((self.nb_new_roads,1))
-
-        # roads = Road.get_all_roads()
         buildings = Building.get_all_buildings()
         regions = Region.get_all_regions()
-        min_x, max_x = -100, 450 * 1.2
-        min_y, max_y = -100 * 1.2, 400 * 1.2
-        min, max = 0, 512
-        # list_road = [roads]
-        # road_img, ax = plot_as_array(list_road, 512, 512,
-        #               y_lim=(-100*1.2,400*1.2), x_lim=(-100,450*1.2),
-        #               transparent=True, antialiased=False)     
+        world_x_range = (-100, 450 * 1.2)
+        world_y_range = (-100 * 1.2, 400 * 1.2)
+        image_x_range = (0, 512)
+        image_y_range = (0, 512)
         list_buire = [buildings, regions]
-        buire_img, ax = plot_as_array(list_buire, max, max,
-                                      y_lim=(min_y, max_y), x_lim=(min_x, max_x),
+        buire_img, ax = plot_as_array(list_buire, image_x_range[1], image_y_range[1],
+                                      y_lim=world_y_range, x_lim=world_x_range,
                                       transparent=True, antialiased=False)
-
-        scaled_points_x = np.interp(self.last_points[:, 0], (min_x, max_x), (min, max))
-        scaled_points_y = np.interp(self.last_points[:, 1], (min_y, max_y), (min, max))
+        last_points = self._get_last_points()
+        scaled_points_x = np.interp(last_points[:, 0], world_x_range, image_x_range)
+        scaled_points_y = np.interp(last_points[:, 1], world_y_range, image_y_range)
         points = np.column_stack((scaled_points_x, scaled_points_y))
-        from DDPG.reward_agent import RewardAgent
+
         reward_agent = RewardAgent(points, buire_img.numpy()[:, :, :3])
         return reward_agent.agent_reward()
 
-    def if_out_region(self):
-        # 定义两个区间的边界
-        bins1 = self.road_net_x_region  # 第一个数的区间
-        bins2 = self.road_net_y_region  # 第二个数的区间
+    def _is_in_region(self, uid) -> bool:
+        """判断uid编号的道路的是否在区域内。该函数仅对最后一个点有效，因此需要每步调用"""
+        lst_pt = tuple(Road.get_road_last_point(self.agents[uid])[0])
+        in_region = True
+        in_region &= self.region_min[0] < lst_pt[0] < self.region_max[0]
+        in_region &= self.region_min[1] < lst_pt[1] < self.region_max[1]
+        return in_region
 
-        # 判断每个数是否在对应的区间内，返回一个0或1的数组
-        # 0表示不在区间内，1表示在区间内
-        res1 = np.where((self.last_points > bins1[0]) & (self.last_points < bins1[1]), True, False)[:, 0]  # 判断第一列
-        res2 = np.where((self.last_points > bins2[0]) & (self.last_points < bins2[1]), True, False)[:, 1]  # 判断第二列
-
-        # 判断每一行是否都为1，即都在区间内，返回一个布尔数组
-        done_region = ~np.all(np.stack([res1, res2], axis=1), axis=1).reshape(-1, 1)
-        print(f'是否在设计区域外{done_region}')
-        return done_region
-
-    def if_the_way_back(self):
-        if len(self.point_list) > 2:
-            ori_voc = self.point_list[-2] - self.point_list[-3]
-            now_voc = self.point_list[-1] - self.point_list[-2]
-            dot = np.dot(ori_voc, now_voc.T)
-            dot = np.diag(dot, k=0)
-            return (dot < 0).reshape(-1, 1)
-        else:
-            return None
-
-    def done(self):
-        """
-        判断每一个新状态下每个小智能体的游戏是否结束,
-        暂定为和再次和其他路相交（不包含智能体创造的新路）、超过一定区域（否则图像状态的缩放会改变）
-        返回值为numpy.ndarray, shape=[nb_new_roads,1]
-        """
-        current_road_net = Road.get_all_roads()
-        cond = current_road_net
-        ori_len = self.road_start_len
-        self.road_end = cond['geometry'].tolist()
-        tolerance = 0.8
-        list_done = []
-        for i in range(0, self.nb_new_roads):
-            agent_road = self.road_end[ori_len + i].buffer(tolerance)
-            num = 0
-            for j in range(0, ori_len):
-                ori_road = self.road_end[j].buffer(tolerance)
-                intersection = agent_road.intersection(ori_road)
-                # print(type(intersection))
-                if intersection.geom_type == 'Polygon' and not intersection.is_empty:
-                    num += 1
-                elif intersection.geom_type == 'MultiPolygon':
-                    num += len(intersection.geoms)
-            #     print(intersection)
-            # print(num)
-            if num > 1:
-                list_done.append(1)
-            else:
-                list_done.append(0)
-            # print(list_ints)
-        done_region = self.if_out_region()
-        done_intersection = np.array(list_done).reshape(-1, 1)
-        agent_done = np.logical_or(done_region, done_intersection)
-        return agent_done
-
-    def Done(self, done):
-        if np.all(done) or self.episode_step >= 200:
+    def _is_way_forward(self, uid) -> bool:
+        """判断uid编号的道路是否向前运动。需要每步调用"""
+        coords = list(self.agents[uid]['geometry'].coords)
+        if len(coords) < 3:
             return True
-        else:
-            return False
+        vec1 = point_utils.vector_from_points(coords[-2], coords[-1])
+        vec2 = point_utils.vector_from_points(coords[-3], coords[-2])
+        return point_utils.vector_dot(vec1, vec2) > 0
 
-    def simple_agent_Done(self):
-        """定义单智能体一个一个训练，判断大循环结束的方法, 目前是超过固定步数 和 没有路可以优化，未来可能会置入密度评价"""
-        if self.episode_step >= 200 or self.if_no_choice_roads:
-            return True
-        else:
-            return False
+    def _is_intersect_with_raw_roads(self, uid):
+        """判断uid编号的道路是否与原始路网相交。该函数仅对最后一段线段有效，因此需要每步调用"""
+        road = self.agents[uid]
+        coords = list(self.agents[uid]['geometry'].coords)
+        if len(coords) < 3:
+            return False  # 如果线段数小于2， 即点数小于3，则不做判断
+        last_element = Road.get_road_last_element(road).buffer(1e-5)
+        intersects = self.raw_roads['geometry'].intersects(last_element)
+        return intersects.sum() > 0  # 由于判断的是最后一段线段，因此只要大于0就是相交，无需考虑起点和原始路径的相交问题
+
+    def _is_agent_done(self, uid) -> bool:
+        """判断uid的道路是否完成"""
+        if self.agents_done[uid]: return True  # 如果在agents_done中已经标记为完成，则直接返回完成
+        if self.episode_step > self.max_episode_step: return True  # 如果达到最大步数，则返回完成
+        done = False
+        done |= not self._is_in_region(uid)
+        # done |= not self._is_way_forward(uid)
+        done |= self._is_intersect_with_raw_roads(uid)
+        return done
+
+    def _all_done(self):
+        """是否所有的agent都完成了"""
+        return all(self.agents_done.values())
+
+
+mRoadNet: Union[RoadNet, None] = None
+mRewardSum = 0
+
+mTargetOptimizedAgentNum = 0  # 仅限顺序模式
+mCurrentOptimizedAgentNum = 0  # 仅限顺序模式
+
+
+def synchronous_mode_init(num_agents):
+    global mRoadNet
+    _ = io_utils.load_data('../data/VirtualEnv/try2.bin')
+    Building.data_to_buildings(_)
+    Region.data_to_regions(_)
+    Road.data_to_roads(_)
+
+    mRoadNet = RoadNet(num_agents)
+
+
+def synchronous_mode_reset():
+    global mRoadNet, mRewardSum
+    mRoadNet.reset()
+    mRoadNet.render()
+    mRewardSum = 0
+    print('road net reset')
+
+
+def synchronous_mode_step(_) -> bool:
+    global mRoadNet, mRewardSum
+    try:
+        print(f'当前轮次 {mRoadNet.episode_step}======================')
+        action_list = []
+        b = mRoadNet.action_space_bound
+        c = mRoadNet.action_space_boundMove
+        for i in range(len(mRoadNet.agents)):
+            a = np.random.uniform(low=-1, high=1, size=(2,))
+            _action = a * b + c
+            action_list.append(_action)
+        action = np.vstack(action_list)
+        print(f'action {action}')
+        next_state, reward, done, all_done = mRoadNet.step(action)
+        mRewardSum += reward
+
+        print(f'当前奖励 {reward}')
+        print(f'当前累计奖励 {mRewardSum}')
+        print(f'单路是否结束 {list(done.values())}')
+        print(f'总体路网是否结束 {all_done}')
+        print('==================================')
+        mRoadNet.render()
+        return all_done
+
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+        return True
+
+
+def sequential_mode_init(num_agents):
+    global mRoadNet, mTargetOptimizedAgentNum
+    _ = io_utils.load_data('../data/VirtualEnv/try2.bin')
+    Building.data_to_buildings(_)
+    Region.data_to_regions(_)
+    Road.data_to_roads(_)
+    mRoadNet = RoadNet(1)
+    mTargetOptimizedAgentNum = num_agents
+
+
+def sequential_mode_reset():
+    global mRoadNet, mRewardSum, mCurrentOptimizedAgentNum
+
+    mRoadNet.reset()
+    mRoadNet.render()
+    mRewardSum = 0
+    mCurrentOptimizedAgentNum = 0
+    print('road net reset')
+
+
+def sequential_mode_step(_) -> bool:
+    global mRoadNet, mRewardSum, mCurrentOptimizedAgentNum
+    if mCurrentOptimizedAgentNum >= mTargetOptimizedAgentNum:
+        return True
+
+    print(f'当前轮次 {mRoadNet.episode_step}======================')
+
+    b = mRoadNet.action_space_bound
+    c = mRoadNet.action_space_boundMove
+    a = np.random.uniform(low=-1, high=1, size=(2,))
+    action = a * b + c
+    print(f'action {action}')
+    next_state, reward, done, all_done = mRoadNet.step(action)
+    mRewardSum += reward
+
+    print(f'当前奖励 {reward}')
+    print(f'当前累计奖励 {mRewardSum}')
+    print(f'单路是否结束 {list(done.values())}')
+    print(f'总体路网是否结束 {all_done}')
+    print('==================================')
+    mRoadNet.render()
+
+    if all_done:  # 这里一个单智能体的完成就会all done ，但不代表整体完成
+        mRoadNet.clear_and_spawn_agents()
+        mCurrentOptimizedAgentNum += 1
+
+    return False
 
 
 if __name__ == '__main__':
-    data = io_utils.load_data(r"try2.bin")
-    Building.data_to_buildings(data)
-    Region.data_to_regions(data)
-    Road.data_to_roads(data)
-
-    A = RoadNet()
-    print(A.road_start)
-    start = time.perf_counter()
-    A.reset()
-    A.render()
-    if A.simple_agent:
-        done = False
-    else:
-        done = np.zeros((A.nb_new_roads, 1))
-    episode_return = 0
-    for e in range(1000):
-        # a = np.array([(0.3, -0.5), (0.4, 0.2), (0.2, 0)])
-        if A.simple_agent:
-            if not done:
-                a = np.random.uniform(low=-1, high=1, size=(2,))
-                b = A.action_space_bound
-                c = A.action_space_boundMove
-                a_a = a * b + c
-                action = a_a.reshape(-1, 2)
-                next_state, reward, done, Done = A.step(action)
-                state = next_state
-                episode_return += reward
-                print(f'当前奖励{reward}')
-                print(f'当前累计奖励{episode_return}')
-                print(f'单路是否结束{done}')
-                print(f'总体路网是否结束{Done}')
-                A.render()
-                if Done:
-                    break
-            else:
-                print(f'进入下一次择优')
-                A.simple_agent_reset()
-                A.render()
-                a = np.random.uniform(low=-1, high=1, size=(2,))
-                b = A.action_space_bound
-                c = A.action_space_boundMove
-                a_a = a * b + c
-                action = a_a.reshape(-1, 2)
-                next_state, reward, done, Done = A.step(action)
-                state = next_state
-                episode_return += reward
-                print(f'当前奖励{reward}')
-                print(f'当前累计奖励{episode_return}')
-                print(f'单路是否结束{done}')
-                print(f'总体路网是否结束{Done}')
-                A.render()
-                if Done:
-                    break
-        else:
-            action_list = []
-            for i in range(A.nb_new_roads):
-                a = np.random.uniform(low=-1, high=1, size=(2,))
-                b = A.action_space_bound
-                c = A.action_space_boundMove
-                a_a = a * b + c
-                if done[i]:
-                    a_a = np.zeros((1, 2))
-                action_list.append(a_a)
-            action = np.array(action_list).reshape(-1, 2)  # (3, 2)
-            next_state, reward, done, Done = A.step(action)
-            state = next_state
-            episode_return += reward
-            print(f'当前奖励{reward}')
-            print(f'当前累计奖励{episode_return}')
-            print(f'单路是否结束{done}')
-            print(f'总体路网是否结束{Done}')
-            A.render()
-            if Done:
-                break
-    end = time.perf_counter()
-
-    print(A.road_start_len)
-    print('Running time: %s Seconds' % (end - start))
+    pass

@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -277,13 +279,11 @@ class Road(Object):
 
         # handle cache
         try:
-            print('1 cache in road')
             if road['cache']:
                 # 如果road是cached过的， 那么任何更改都会导致cache失效
                 Road._flag_cached_graph_need_update = True
         except Exception as e:
-            print(e)
-            print('2 cache not in road')
+            pass
             # delete unused nodes
         if update_nodes_immediately:
             Road._clear_node(u)
@@ -374,7 +374,6 @@ class Road(Object):
         for attr in cluster:
             gdfs = []
             if all(cluster[attr].values()):
-                print(f'{attr} 全都是True, 跳过')
                 continue
             for key in cluster[attr]:
                 if cluster[attr][key]:
@@ -385,7 +384,6 @@ class Road(Object):
             gdf = pd.concat(gdfs, ignore_index=False)
             uid_sets_by_attr.append(set(gdf.index))
         if len(uid_sets_by_attr) == 0:
-            print(f'全都为True, 直接返回所有')
             return Road.get_all_roads()
         common_uid = list(set.intersection(*uid_sets_by_attr))
         return Road.get_all_roads().loc[common_uid]
@@ -407,6 +405,35 @@ class Road(Object):
                 gdfs.append(roads)
         assert len(gdfs) > 0
         return pd.concat(gdfs, ignore_index=False)
+
+    @staticmethod
+    def get_valid_spawn_range(road:pd.Series):
+        """求可以生成新路的位置，如果没有，返回None"""
+        line_string: LineString = road['geometry']
+        dist_threshold = road_utils.distance_threshold_by_road_level[road['level']]
+        if line_string.length < 2 * dist_threshold:
+            return None, None
+        return dist_threshold, line_string.length - dist_threshold
+
+    @staticmethod
+    def get_road_last_point(road:pd.Series) -> np.ndarray:
+        geo = road['geometry']
+        coord = list(geo.coords[-1])
+        return np.array([coord])
+    @staticmethod
+    def get_road_last_element(road:pd.Series)->Union[LineString, Point]:
+        geo = road['geometry']
+        coords = list(geo.coords)
+        if len(coords) == 0:
+            return geo
+        pt1 = coords[-1]
+        pt2 = coords[-2]
+        return LineString([pt1, pt2])
+    @staticmethod
+    def cal_intersection_num(road:pd.Series, roads:gpd.GeoDataFrame) -> bool:
+        buffered_road = road['geometry'].buffer(1e-3)
+        intersects = roads['geometry'].intersects(buffered_road)
+        return intersects.sum()
 
     # endregion
 
@@ -496,6 +523,15 @@ class Road(Object):
         except Exception as e:
             pass
         return np.array(list(cut_point.coords))
+
+    @staticmethod
+    def split_road_by_random_position(road: pd.Series):
+        """随机选取一个位置作为新路的出生点，并且将路进行分割， 返回分割点"""
+        dist_min, dist_max = Road.get_valid_spawn_range(road)
+        if dist_min is None or dist_max is None:
+            return None
+        dist = random.uniform(dist_min, dist_max)
+        return Road.split_road(road, dist, normalized=False)
 
     @staticmethod
     def merge_roads(road1: pd.Series, road2: pd.Series, debug=True, update_nodes_immediately=True):

@@ -6,7 +6,7 @@ from geo import Road
 from utils import io_utils
 from gui import global_var as g
 from gui import components as imgui_c
-
+from gui import common
 from gui import imgui_main_texture_toolbox_subwindow
 
 mImageWindowSize = (0, 0)
@@ -49,6 +49,7 @@ def show():
                 imgui.image(texture.texture_id, texture.width * g.mTextureScale, texture.height * g.mTextureScale)
                 if texture.name == 'main':
                     g.mShowingMainTextureWindow = True
+                    common.update_main_graphic()
                     imgui_main_texture_toolbox_subwindow.show()
                 else:
                     g.mShowingMainTextureWindow = False

@@ -1,9 +1,13 @@
+import random
 import time
 import matplotlib.pyplot as plt
 from enum import Enum
 import pandas as pd
 import imgui
+from shapely import LineString
+
 from utils.common_utils import imgui_item_selector_component
+
 
 class RoadLevel(Enum):
     MAIN = 0
@@ -19,6 +23,14 @@ class RoadState(Enum):
     OPTIMIZED = 1
     OPTIMIZING = 2
 
+
+distance_threshold_by_road_level = {
+    RoadLevel.MAIN: 80,
+    RoadLevel.SECONDARY: 60,
+    RoadLevel.BRANCH: 40,
+    RoadLevel.ALLEY: 20,
+    RoadLevel.UNDEFINED: 20
+}
 
 all_highway_types = {'service', 'residential', 'footway', 'secondary', 'pedestrian', 'primary',
                      'tertiary', 'trunk', 'unclassified', 'secondary_link', 'busway', 'steps', 'cycleway'}
@@ -42,9 +54,6 @@ def highway_to_level(highway):
         return RoadLevel.CUSTOM
 
 
-
-
-
 class RoadCluster:
     def __init__(self):
         self.cluster = {'level': {key: True for key in RoadLevel}, 'state': {key: True for key in RoadState}}
@@ -54,3 +63,10 @@ class RoadCluster:
         any_change |= imgui_item_selector_component('level cluster >', self.cluster['level'])
         any_change |= imgui_item_selector_component('state cluster >', self.cluster['state'])
         return any_change
+
+
+
+
+
+
+

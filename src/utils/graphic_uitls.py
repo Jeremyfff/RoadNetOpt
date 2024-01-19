@@ -31,7 +31,7 @@ def plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, 
     return plot_as_array2(_plot_gdf_func, width, height, y_lim, x_lim, transparent, antialiased,tensor, gdf=gdf, **kwargs)
 
 
-@timer
+
 def plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False,tensor=True, **kwargs):
     # 禁用/启用抗锯齿效果
     matplotlib.rcParams['lines.antialiased'] = antialiased
@@ -154,7 +154,7 @@ def create_texture_from_array(data):
     return texture_id
 
 
-@timer
+
 def update_texture(texture_id, data):
     if isinstance(data, torch.Tensor):
         data = data.cpu().numpy()
@@ -168,7 +168,7 @@ def update_texture(texture_id, data):
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data)
 
 
-@timer
+
 def blend_img_data(bot: torch.Tensor, top: torch.Tensor):
     # 分离 alpha 通道
     with torch.no_grad():
