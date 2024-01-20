@@ -1,57 +1,58 @@
-import random
-import time
-import matplotlib.pyplot as plt
 from enum import Enum
-import pandas as pd
-import imgui
-from shapely import LineString
 
-from utils.common_utils import imgui_item_selector_component
+from gui.components import imgui_item_selector_component
 
 
 class RoadLevel(Enum):
-    MAIN = 0
-    SECONDARY = 1
-    BRANCH = 2
-    ALLEY = 3
-    CUSTOM = 4
+    TRUNK = 0
+    PRIMARY = 1
+    SECONDARY = 2
+    TERTIARY = 3
+    FOOTWAY = 4
     UNDEFINED = -1
 
 
 class RoadState(Enum):
     RAW = 0
-    OPTIMIZED = 1
-    OPTIMIZING = 2
+    MODIFIED = 1
+    OPTIMIZED = 2
+    OPTIMIZING = 3
 
 
+#  路口距离阈值
 distance_threshold_by_road_level = {
-    RoadLevel.MAIN: 80,
-    RoadLevel.SECONDARY: 60,
-    RoadLevel.BRANCH: 40,
-    RoadLevel.ALLEY: 20,
-    RoadLevel.UNDEFINED: 20
+    RoadLevel.TRUNK: 80,
+    RoadLevel.PRIMARY: 60,
+    RoadLevel.SECONDARY: 40,
+    RoadLevel.TERTIARY: 20,
+    RoadLevel.FOOTWAY: 10,
+    RoadLevel.UNDEFINED: 10
 }
 
+# osm 转换工具
 all_highway_types = {'service', 'residential', 'footway', 'secondary', 'pedestrian', 'primary',
                      'tertiary', 'trunk', 'unclassified', 'secondary_link', 'busway', 'steps', 'cycleway'}
 
-main_types = {'trunk', 'primary'}
+trunk_types = {'trunk'}
+primary_types = {'primary'}
 secondary_types = {'secondary'}
-branch_types = {'tertiary'}
-alley_types = {'residential', 'footway', 'cycleway', 'steps', 'pedestrian'}
+tertiary_types = {'tertiary'}
+footway_types = {'residential', 'footway', 'cycleway', 'steps', 'pedestrian'}
 
 
 def highway_to_level(highway):
-    if highway in main_types:
-        return RoadLevel.MAIN
+    if highway in trunk_types:
+        return RoadLevel.TRUNK
+    elif highway in primary_types:
+        return RoadLevel.PRIMARY
     elif highway in secondary_types:
         return RoadLevel.SECONDARY
-    elif highway in branch_types:
-        return RoadLevel.BRANCH
-    elif highway in alley_types:
-        return RoadLevel.ALLEY
+    elif highway in tertiary_types:
+        return RoadLevel.TERTIARY
+    elif highway in footway_types:
+        return RoadLevel.FOOTWAY
     else:
-        return RoadLevel.CUSTOM
+        return RoadLevel.UNDEFINED
 
 
 class RoadCluster:
@@ -63,10 +64,3 @@ class RoadCluster:
         any_change |= imgui_item_selector_component('level cluster >', self.cluster['level'])
         any_change |= imgui_item_selector_component('state cluster >', self.cluster['state'])
         return any_change
-
-
-
-
-
-
-

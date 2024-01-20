@@ -56,3 +56,14 @@ def is_hovering_window():
     _size = imgui.get_window_size()
     _max = (_min[0] + _size[0], _min[1] + _size[1])
     return imgui.is_mouse_hovering_rect(_min[0], _min[1], _max[0], _max[1])
+
+def imgui_item_selector_component(label, dict):
+    any_clicked = False
+    if imgui.button(label, width=200):
+        imgui.open_popup(f'{label} selector')
+    if imgui.begin_popup(f'{label} selector'):
+        for key in dict:
+            clicked, dict[key] = imgui.checkbox(str(key), dict[key])
+            any_clicked |= clicked
+        imgui.end_popup()
+    return any_clicked

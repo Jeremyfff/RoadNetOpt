@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import time
 import pandas as pd
 from shapely.geometry import LineString, Point
-from shapely.ops import split, nearest_points
+from shapely.ops import split
 
 import networkx as nx
 from geo import Object
@@ -532,7 +532,16 @@ class Road(Object):
             return None
         dist = random.uniform(dist_min, dist_max)
         return Road.split_road(road, dist, normalized=False)
+    @staticmethod
+    def detect_intersection_and_split(road:pd.Series, roads:gpd.GeoDataFrame):
+        """road即图中a2，即在生长的路， roads即其他需要和他判断是否相交的道路"""
+        # 判断交点
 
+        # 筛选出合理的交点
+
+        # 根据交点分割碰撞的道路，并裁剪生长的道路
+
+        # 返回？？
     @staticmethod
     def merge_roads(road1: pd.Series, road2: pd.Series, debug=True, update_nodes_immediately=True):
         assert isinstance(road1, pd.Series)
@@ -717,7 +726,7 @@ class Road(Object):
             elif 'highway' in data:
                 level = road_utils.highway_to_level(highway=data['highway'])
             else:
-                level = RoadLevel.CUSTOM
+                level = RoadLevel.UNDEFINED
             level_list.append(level)
             if 'state' in data:
                 state = data['state']
@@ -772,8 +781,8 @@ class Road(Object):
             [120, 20],
             [0, 20]
         ])
-        uid1 = Road.add_road_by_coords(np.array([points[0], points[4]]), RoadLevel.MAIN, RoadState.RAW)
-        uid2 = Road.add_road_by_coords(np.array([points[4], points[1]]), RoadLevel.MAIN, RoadState.RAW)
+        uid1 = Road.add_road_by_coords(np.array([points[0], points[4]]), RoadLevel.TRUNK, RoadState.RAW)
+        uid2 = Road.add_road_by_coords(np.array([points[4], points[1]]), RoadLevel.TRUNK, RoadState.RAW)
         uid3 = Road.add_road_by_coords(np.array([points[2], points[4]]), RoadLevel.SECONDARY, RoadState.RAW)
         uid4 = Road.add_road_by_coords(np.array([points[4], points[3]]), RoadLevel.SECONDARY, RoadState.RAW)
         return [uid1, uid2, uid3, uid4]
@@ -845,7 +854,7 @@ def example_roads_to_graph():
     # 遍历图中的每条边，根据 RoadLevel 属性来设置边的粗细
     for u, v, data in G.edges(data=True):
         road_level = data['level']
-        if road_level == RoadLevel.MAIN:
+        if road_level == RoadLevel.TRUNK:
             edge_width[(u, v)] = 5
         elif road_level == RoadLevel.SECONDARY:
             edge_width[(u, v)] = 3

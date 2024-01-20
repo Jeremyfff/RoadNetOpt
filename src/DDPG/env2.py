@@ -28,7 +28,7 @@ class RoadNet:
         self.observation_space_shape = (512, 512, 4)  # [height, width, channel]
 
         self.episode_step: int = 0  # 当前步数
-        self.raw_roads: gpd.geodataframe = Road.get_all_roads()  # 保存原有道路， 分裂后的新道路不在其中
+        self.raw_roads: gpd.GeoDataFrame = Road.get_all_roads()  # 保存原有道路， 分裂后的新道路不在其中
         self.agents: dict[uuid.UUID: pd.Series] = {}  # 所有的新的道路智能体
         self.agents_done: dict[uuid.UUID, bool] = {}  # 个体是否完成
 
@@ -56,7 +56,7 @@ class RoadNet:
             spawn_point = Road.split_road_by_random_position(random_road)  # 在路上随机一个点并尝试分裂
             if spawn_point is None: continue  # 如果找不到符合路网间距规范的点，则重新选一条路
 
-            uid = Road.add_road_by_coords(spawn_point, RoadLevel.BRANCH, RoadState.OPTIMIZING)  # 生成新路
+            uid = Road.add_road_by_coords(spawn_point, RoadLevel.TERTIARY, RoadState.OPTIMIZING)  # 生成新路
             new_road = Road.get_road_by_uid(uid)
 
             self.agents[uid] = new_road  # 将新路加入self.agents
@@ -75,7 +75,7 @@ class RoadNet:
         return image_data.numpy()
 
     def render(self):
-        GraphicManager.instance.bilt_to('RoadNet', self.get_image_observation())
+        GraphicManager.instance.bilt_to('RoadNet Observation', self.get_image_observation())
 
     def step(self, action):
         """返回new_observation, rewards, done, all_done"""

@@ -94,16 +94,7 @@ def duplicate_filter(logger):
     return decorator
 
 
-def imgui_item_selector_component(label, dict):
-    any_clicked = False
-    if imgui.button(label, width=200):
-        imgui.open_popup(f'{label} selector')
-    if imgui.begin_popup(f'{label} selector'):
-        for key in dict:
-            clicked, dict[key] = imgui.checkbox(str(key), dict[key])
-            any_clicked |= clicked
-        imgui.end_popup()
-    return any_clicked
+
 
 
 if __name__ == '__main__':

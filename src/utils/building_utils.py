@@ -1,5 +1,5 @@
 from enum import Enum
-from utils.common_utils import imgui_item_selector_component
+from gui.components import imgui_item_selector_component
 
 
 class BuildingMovableType(Enum):

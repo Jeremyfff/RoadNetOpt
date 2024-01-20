@@ -12,7 +12,7 @@ from gui import components as imgui_c
 from gui import global_var as g
 from gui import common
 
-mDataPath = '../data/和县/simplified_data.bin'
+mDataPath = '../data/和县/data.bin'
 mData = None
 mDataSize = 0
 mConstEmptyData = {'version': 'N/A', 'roads': 'N/A', 'buildings': 'N/A', 'regions': 'N/A', 'height': 'N/A'}

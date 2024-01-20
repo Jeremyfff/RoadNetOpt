@@ -18,6 +18,7 @@ def show():
     if g.mDxfWindowOpened:
         expanded, g.mDxfWindowOpened = imgui.begin('dxf文件转换工具', True)
         g.mHoveringDxfSubWindow = imgui_c.is_hovering_window()
+        imgui.text('您需要将dxf文件中的地形 block 炸开')
         imgui.text('DXF path')
         imgui.push_id('dxf_path')
         changed, mDxfPath = imgui.input_text('', mDxfPath)
