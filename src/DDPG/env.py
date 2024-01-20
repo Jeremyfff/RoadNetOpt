@@ -23,8 +23,8 @@ class RoadNet:
     get_image = False
     if_render = False
     # 智能体能活动的画布区域坐标x 在（-40,500）, 坐标y在（-50,500）
-    road_net_x_region = [-40, 500]
-    road_net_y_region = [-50, 500]
+    road_net_x_region = [-40, 450]
+    road_net_y_region = [-50, 450]
 
     action_space_bound = np.array([(math.pi, 30)])  # [((-π~π), (-20~20))]
     action_space_boundMove = np.array([(0, 30)])  # [((-π~π), (0~60))]
@@ -50,8 +50,11 @@ class RoadNet:
             return np.array([np.nan])
 
     def out_start_points_by_index(self, index, distance_array):
+        # print(index)
         road = self.current_road_net.iloc[index]
+        # print(road)
         distance = distance_array[index]
+        # print(distance)
         point = Road.split_road(road, distance, normalized=False, update_nodes_immediately=True)
         return point
 
@@ -75,12 +78,19 @@ class RoadNet:
                 for i in new_distance_index:
                     point = self.out_start_points_by_index(i, new_distance_array)
                     list_points.append(point)
+
+            self.current_road_net = Road.get_all_roads()
+            cond = self.current_road_net
+            self.road_start = cond['geometry'].tolist()
+            self.road_start_len = len(self.road_start)
+
             for point in list_points:
                 Road.add_road_by_coords(coords=point, level=RoadLevel.BRANCH,
                                         state=RoadState.OPTIMIZING)
             self.last_points = np.concatenate(list_points, axis=0)
             self.point_list.append(self.last_points)
-            # print(Road.get_all_roads())
+
+            # print(road_list)
         else:
             pass
 
@@ -88,7 +98,6 @@ class RoadNet:
         self.point_list = collections.deque(maxlen=3)
         self.current_road_net = Road.get_all_roads()
         self.road_start = Road.get_all_roads()['geometry'].tolist()
-        self.road_start_len = len(self.road_start)
         # print(f'当前道路个数{self.road_start_len}')
         new_distance = [self.check_line_and_out_random_distance(l, self.distance) for l in self.road_start]
         new_distance_array = np.concatenate(new_distance, axis=0)  # distance索引表（含nan值）
@@ -101,6 +110,8 @@ class RoadNet:
             for i in choice_index:
                 point = self.out_start_points_by_index(i, new_distance_array)
                 list_points.append(point)
+            self.road_start = Road.get_all_roads()['geometry'].tolist()
+            self.road_start_len = len(self.road_start)
             for point in list_points:
                 Road.add_road_by_coords(coords=point, level=RoadLevel.BRANCH,
                                         state=RoadState.OPTIMIZING)
@@ -126,17 +137,16 @@ class RoadNet:
         # pil_image = Image.fromarray(self.return_image_observation())
         # 显示图像
         cv2.imshow('RoadNetOpt', self.return_image_observation())
-        cv2.waitKey()
+        cv2.waitKey(20)
 
     def step(self, action):
         """返回new_observation, rewards, done, Done"""
         ori_points = self.last_points
         self.episode_step += 1
-        if self.simple_agent:
-            print(f'现在是第 {self.episode_step} 步')
-        else:
-            print(f'现在是第 {self.episode_step} 轮')
-        # print(points)
+        # if self.simple_agent:
+        #     print(f'现在是第 {self.episode_step} 步')
+        # else:
+        #     print(f'现在是第 {self.episode_step} 轮')
         i = action
         x_move = np.reshape(np.cos(i[:, 0]) * i[:, 1], (-1, 1))
         y_move = np.reshape(np.sin(i[:, 0]) * i[:, 1], (-1, 1))
@@ -153,14 +163,18 @@ class RoadNet:
         # 根据下一时刻状态，判断该动作下获得的奖励
         # reward = np.zeros((self.nb_new_roads, 1))
         # 判断单体路生长是否结束
-        print(f'是否走了回头路{self.if_the_way_back()}')
-        done = self.done()
+        # print(f'是否走了回头路{self.if_the_way_back()}')
+        done, split_list = self.done()
         reward = self.reward()
         # 判断路网生长是否结束
         if not self.simple_agent:
             Done = self.Done(done)
         else:
             Done = self.simple_agent_Done()
+            if done:
+                self.split_road_after_done(split_list)
+        # if Done:
+        #     self.split_road_after_done(split_list)
 
         if self.if_render:
             self.render()
@@ -205,7 +219,7 @@ class RoadNet:
 
         # 判断每一行是否都为1，即都在区间内，返回一个布尔数组
         done_region = ~np.all(np.stack([res1, res2], axis=1), axis=1).reshape(-1, 1)
-        print(f'是否在设计区域外{done_region}')
+        # print(f'是否在设计区域外{done_region}')
         return done_region
 
     def if_the_way_back(self):
@@ -228,30 +242,41 @@ class RoadNet:
         cond = current_road_net
         ori_len = self.road_start_len
         self.road_end = cond['geometry'].tolist()
-        tolerance = 0.8
+        tolerance = 0.1
         list_done = []
+        split_list = []
         for i in range(0, self.nb_new_roads):
             agent_road = self.road_end[ori_len + i].buffer(tolerance)
             num = 0
+            split = []
             for j in range(0, ori_len):
                 ori_road = self.road_end[j].buffer(tolerance)
                 intersection = agent_road.intersection(ori_road)
-                # print(type(intersection))
                 if intersection.geom_type == 'Polygon' and not intersection.is_empty:
+                    intersect_point = geo.Point(intersection.exterior.coords[0])
+                    t = self.road_end[j].project(intersect_point) / self.road_end[j].length
+                    if not (t < 0.1 or 1 - t < 0.1):
+                        split.append(cond['uid'].iloc[j])
+                        split.append(t)
                     num += 1
                 elif intersection.geom_type == 'MultiPolygon':
+                    for polygon in intersection.geoms:
+                        intersect_point = geo.Point(polygon.exterior.coords[0])
+                        t = self.road_end[j].project(intersect_point) / self.road_end[j].length
+                        if not (t < 0.1 or 1 - t < 0.1):
+                            split.append(cond['uid'].iloc[j])
+                            split.append(t)
                     num += len(intersection.geoms)
-            #     print(intersection)
-            # print(num)
-            if num > 1:
+            if num > 2:
                 list_done.append(1)
             else:
                 list_done.append(0)
-            # print(list_ints)
+            if len(split) != 0:
+                split_list.append(split)
         done_region = self.if_out_region()
         done_intersection = np.array(list_done).reshape(-1, 1)
         agent_done = np.logical_or(done_region, done_intersection)
-        return agent_done
+        return agent_done, split_list
 
     def Done(self, done):
         if np.all(done) or self.episode_step >= 200:
@@ -265,6 +290,15 @@ class RoadNet:
             return True
         else:
             return False
+
+    def split_road_after_done(self, split_list):
+        # print(split_list)
+        if len(split_list) != 0:
+            for split in split_list:
+                uid = split[0]
+                distance_normalized = split[1]
+                road = Road.get_road_by_uid(uid)
+                Road.split_road(road, distance_normalized, normalized=True, update_nodes_immediately=True)
 
 
 if __name__ == '__main__':
@@ -342,7 +376,6 @@ if __name__ == '__main__':
             A.render()
             if Done:
                 break
+    # print(Road.get_all_roads())
     end = time.perf_counter()
-
-    print(A.road_start_len)
     print('Running time: %s Seconds' % (end - start))
