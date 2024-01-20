@@ -187,6 +187,12 @@ class MainGraphTexture(GraphicTexture):
         return 0 <= pos[0] < self.width and 0 <= pos[1] < self.height
 
     def _wrapped_plot_as_array2(self, plot_func, **kwargs):
+        """
+        自动提供的参数有： width, height, y_lim, transparent, antialiased, ax
+        需要提供的参数有：plot_func
+        可提供的参数有：x_lim
+        其他可以提供的参数有：plot_func绘图需要的参数,其中ax会自动提供给plot_func
+        """
         img_data, ax = graphic_uitls.plot_as_array2(plot_func=plot_func,
                                                     width=self.width,
                                                     height=self.height,
@@ -218,7 +224,7 @@ class MainGraphTexture(GraphicTexture):
 
     def _render_buildings(self):
         if self.cached_building_data is None or self.cached_building_uid != Building.uid():
-            img_data, ax = self._wrapped_plot_as_array2(Building.plot_using_style_factory,
+            img_data, ax = self._wrapped_plot_as_array2(Building.plot_patch_using_style_factory,
                                                         x_lim=self.x_lim,
                                                         buildings=Building.get_buildings_by_cluster(
                                                             self._building_cluster),
@@ -269,7 +275,8 @@ class MainGraphTexture(GraphicTexture):
                 img_data, ax = self._wrapped_plot_as_array2(Road.plot_roads,
                                                             x_lim=self.x_lim,
                                                             roads=roads,
-                                                            colors=(0, 1, 0, 1))
+                                                            linewidth=5,
+                                                            colors=(0.8, 1, 1, 0.8))
 
             else:
                 img_data = torch.zeros((self.height, self.width, 4), dtype=torch.uint8)

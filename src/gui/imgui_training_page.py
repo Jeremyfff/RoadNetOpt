@@ -9,7 +9,9 @@ import traceback
 from graphic_module import GraphicManager
 from gui import global_var as g
 from gui import common
+from gui import components as imgui_c
 from geo import Road, Building, Region
+from style_module import StyleManager
 from utils import RoadLevel, RoadState
 from utils import io_utils, graphic_uitls
 from gui.animation_module import Animation
@@ -19,6 +21,10 @@ print('training page loaded')
 
 mSelectStartPointMode = False
 mRoadInterpolateValue = 0.5
+mRoadLevelStrs = [str(key) for key in RoadLevel]
+mRoadLevels = [key for key in RoadLevel]
+mCurrentRoadLevelIdx = 3
+
 mNewRoads: dict[int, pd.Series] = {}
 
 mRoadPtSeqData: list = []
@@ -32,9 +38,9 @@ mNumAgents = 3
 
 
 def show():
-    global mRoadInterpolateValue, mNewRoads, mRoadPtSeqData, mRoadAnimationData, mRoadGrowAnimation, \
-        mSelectStartPointMode, \
-        mRoadNetAnimation, mRoadNetAnimationTimeGap, mSyncMode, mNumAgents
+    global mRoadInterpolateValue, mNewRoads, mSelectStartPointMode, mCurrentRoadLevelIdx
+    global mRoadPtSeqData, mRoadAnimationData, mRoadGrowAnimation
+    global mRoadNetAnimation, mRoadNetAnimationTimeGap, mSyncMode, mNumAgents
     imgui.push_id('agent_op')
 
     if imgui.tree_node('快捷工具'):
@@ -44,13 +50,13 @@ def show():
         if imgui.button('restore'):
             Road.restore()
             mNewRoads = {}
-        if imgui.button('delete branch'):
-            roads = Road.get_roads_by_attr_and_value('level', RoadLevel.BRANCH)
+        if imgui.button('delete TERTIARY'):
+            roads = Road.get_roads_by_attr_and_value('level', RoadLevel.TERTIARY)
             for uid, road in roads.iterrows():
                 Road.delete_road(road)
         imgui.same_line()
-        if imgui.button('delete alley'):
-            roads = Road.get_roads_by_attr_and_value('level', RoadLevel.ALLEY)
+        if imgui.button('delete FOOTWAY'):
+            roads = Road.get_roads_by_attr_and_value('level', RoadLevel.FOOTWAY)
             for uid, road in roads.iterrows():
                 Road.delete_road(road)
         imgui.tree_pop()
@@ -98,6 +104,24 @@ def show():
                 try:
                     imgui.text('您正在选择新建道路的起点')
                     _, mRoadInterpolateValue = imgui.slider_float('位置', mRoadInterpolateValue, 0, 1)
+                    # _, mCurrentRoadLevelIdx = imgui.combo('Road Level', mCurrentRoadLevelIdx, mRoadLevelStrs)
+                    if imgui.button(f'{str(mRoadLevels[mCurrentRoadLevelIdx])} >'):
+                        imgui.open_popup('road level selector')
+                    imgui.same_line()
+                    imgui.color_button('', *StyleManager.instance.display_style.ROAD_COLOR_BY_LEVEL[
+                        mRoadLevels[mCurrentRoadLevelIdx]
+                    ])
+                    if imgui.begin_popup('road level selector'):
+                        for i in range(len(mRoadLevels)):
+                            imgui.color_button('', *StyleManager.instance.display_style.ROAD_COLOR_BY_LEVEL[
+                                mRoadLevels[i]
+                            ])
+                            imgui.same_line()
+                            _, selected = imgui.selectable(str(mRoadLevels[i]))
+                            if selected:
+                                mCurrentRoadLevelIdx = i
+                                imgui.close_current_popup()
+                        imgui.end_popup()
                     geo = g.mCurrentEditingRoad['geometry']
                     cut_point = geo.interpolate(mRoadInterpolateValue, True)
                     cut_point_tuple = tuple(cut_point.coords)[0]
@@ -117,13 +141,15 @@ def show():
 
                     if imgui.button('确认起点', 300 * g.GLOBAL_SCALE, 24 * g.GLOBAL_SCALE):
                         cut_point_array = np.array([[cut_point_tuple[0], cut_point_tuple[1]]])
-                        new_road_uid = Road.add_road_by_coords(cut_point_array, RoadLevel.BRANCH, RoadState.OPTIMIZING)
+                        new_road_uid = Road.add_road_by_coords(cut_point_array, mRoadLevels[mCurrentRoadLevelIdx], RoadState.OPTIMIZING)
                         new_road = Road.get_road_by_uid(new_road_uid)
                         mNewRoads[len(mNewRoads.keys())] = new_road
                         g.mCurrentEditingRoad = new_road
                         g.mAddNodeMode = True
                         mSelectStartPointMode = False
                         common.clear_selected_roads_and_update_graphic()
+                    if imgui.button('取消'):
+                        mSelectStartPointMode = False
                 except Exception as e:
                     print(e)
 
@@ -151,8 +177,12 @@ def show():
         imgui.text('保存与加载工具: ')
         if imgui.button('保存new points'):
             # 这里不能用原始的road对象，因为road增加点后没有更新，应该重新根据uid查找一遍
-            mRoadPtSeqData = [list(Road.get_road_by_uid(road["uid"])['geometry'].coords) for road in
-                              mNewRoads.values()]
+            mRoadPtSeqData = []
+            for road in mNewRoads.values():
+                try:
+                    mRoadPtSeqData.append((road['level'], list(Road.get_road_by_uid(road["uid"])['geometry'].coords)))
+                except:
+                    pass
 
             file_path = io_utils.save_file_window(defaultextension='.ptseq',
                                                   filetypes=[('Point Sequence', '.ptseq')])
@@ -198,10 +228,12 @@ def show():
 
 def road_grow_animation_reset_func():
     global mRoadAnimationData, mNewRoads
-    mRoadAnimationData = {i: pt_seq for i, pt_seq in enumerate(mRoadPtSeqData)}
-
+    mRoadAnimationData = {i: road_seq_data for i, road_seq_data in enumerate(mRoadPtSeqData)}
     for road in mNewRoads.values():
-        Road.delete_road(Road.get_road_by_uid(road['uid']))
+        try:
+            Road.delete_road(Road.get_road_by_uid(road['uid']))
+        except:
+            pass
     mNewRoads = {}
     GraphicManager.instance.main_texture.clear_road_data_deep()
 
@@ -211,13 +243,15 @@ def road_grow_animation_body_func(step: int) -> bool:
     try:
         count = 0
         for i in mRoadAnimationData.keys():
-            pt_seq = mRoadAnimationData[i]
+            pt_seq_data = mRoadAnimationData[i]
+            level = pt_seq_data[0]
+            pt_seq = pt_seq_data[1]
             if step >= len(pt_seq):
                 continue
             pt = pt_seq[step]
             pt = np.array([[pt[0], pt[1]]])
             if step == 0:
-                uid = Road.add_road_by_coords(pt, RoadLevel.BRANCH, RoadState.OPTIMIZING)
+                uid = Road.add_road_by_coords(pt, level, RoadState.OPTIMIZING)
                 road = Road.get_road_by_uid(uid)
                 mNewRoads[i] = road
             else:

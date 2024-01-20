@@ -1,11 +1,8 @@
 import os.path
 import pickle
-import time
-
 import ezdxf
 import numpy as np
-import xml.etree.ElementTree as ET
-from utils import building_utils, road_utils, INFO_VERSION
+from utils import INFO_VERSION
 from utils import RoadLevel, RoadState, RegionAccessibleType, RegionType, BuildingStyle, BuildingQuality, \
     BuildingMovableType
 from utils.common_utils import timer
@@ -14,17 +11,17 @@ from tkinter import filedialog
 
 # 指定要提取的图层名称
 road_layer_mapper = {
-    '车行-主干道': RoadLevel.MAIN,
+    '车行-主干道': RoadLevel.TRUNK,
+    '车行-次干道': RoadLevel.PRIMARY,
     '车行-支路': RoadLevel.SECONDARY,
-    '车行-次干道': RoadLevel.SECONDARY,
-    '车行-街巷': RoadLevel.BRANCH,
-    '人行-街巷': RoadLevel.ALLEY
+    '车行-街巷': RoadLevel.TERTIARY,
+    '人行-街巷': RoadLevel.FOOTWAY
 }
 
 road_state_mapper = {
     '车行-主干道': RoadState.RAW,
-    '车行-支路': RoadState.RAW,
     '车行-次干道': RoadState.RAW,
+    '车行-支路': RoadState.RAW,
     '车行-街巷': RoadState.RAW,
     '人行-街巷': RoadState.RAW
 }
@@ -59,102 +56,105 @@ region_type_mapper = {
 
 
 @timer
-def load_dxf(path):
+def load_dxf(_path):
     # 打开 CAD 文件
     print('reading file...')
-    doc = ezdxf.readfile(path)
-    return doc
+    _doc = ezdxf.readfile(_path)
+    return _doc
 
 
-def get_dxf_layers(doc):
-    layers = set()
-    msp = doc.modelspace()
-    for entity in msp:
-        layers.add(entity.dxf.layer)
-    return layers
+def get_dxf_layers(_doc):
+    _layers = set()
+    _msp = _doc.modelspace()
+    for _entity in _msp:
+        _layers.add(_entity.dxf.layer)
+    return _layers
 
 
 @timer
-def dxf_to_data(doc):
-    msp = doc.modelspace()
-    data = {'version': INFO_VERSION, 'roads': [], 'buildings': [], 'regions': [], 'height': []}
+def dxf_to_data(_doc):
+    _msp = _doc.modelspace()
+    _data = {'version': INFO_VERSION, 'roads': [], 'buildings': [], 'regions': [], 'height': []}
     print('parsing entities...')
-    for entity in msp:
+    for _entity in _msp:
         # ROADS
-        if entity.dxf.layer in road_layer_mapper.keys():
-            if entity.dxftype() == 'LWPOLYLINE' or entity.dxftype() == 'POLYLINE' or entity.dxftype() == 'LINE':
-                points = _get_entity_points_auto(entity)
-                road_data = {
-                    'points': points,
-                    'level': road_layer_mapper[entity.dxf.layer],
-                    'state': road_state_mapper[entity.dxf.layer]
+        if _entity.dxf.layer in road_layer_mapper.keys():
+            if _entity.dxftype() == 'LWPOLYLINE' or _entity.dxftype() == 'POLYLINE' or _entity.dxftype() == 'LINE':
+                _points = _get_entity_points_auto(_entity)
+                _road_data = {
+                    'points': _points,
+                    'level': road_layer_mapper[_entity.dxf.layer],
+                    'state': road_state_mapper[_entity.dxf.layer]
                 }
-                data['roads'].append(road_data)
+                _data['roads'].append(_road_data)
         # HEIGHT
-        elif entity.dxf.layer == height_layer:
-            if entity.dxftype() == 'TEXT':  # 判断实体类型为文本
+        elif _entity.dxf.layer == height_layer:
+            if _entity.dxftype() == 'TEXT':  # 判断实体类型为文本
                 # text_content = entity.dxf.text  # 获取文字内容
-                insertion_point = entity.dxf.insert
-                data['height'].append(insertion_point.xyz)
+                _insertion_point = _entity.dxf.insert
+                _data['height'].append(_insertion_point.xyz)
         # BUILDINGS
-        elif entity.dxf.layer in building_style_mapper.keys():
-            if (entity.dxftype() == 'LWPOLYLINE' or entity.dxftype() == 'POLYLINE') and entity.is_closed:
-                points = _get_entity_points_auto(entity)
-                building_data = {
-                    'points': points,
-                    'style': building_style_mapper[entity.dxf.layer],
-                    'movable': building_movable_mapper[entity.dxf.layer],
-                    'quality': building_quality_mapper[entity.dxf.layer]
+        elif _entity.dxf.layer in building_style_mapper.keys():
+            if (_entity.dxftype() == 'LWPOLYLINE' or _entity.dxftype() == 'POLYLINE') and _entity.is_closed:
+                _points = _get_entity_points_auto(_entity)
+                _building_data = {
+                    'points': _points,
+                    'style': building_style_mapper[_entity.dxf.layer],
+                    'movable': building_movable_mapper[_entity.dxf.layer],
+                    'quality': building_quality_mapper[_entity.dxf.layer]
                 }
-                data['buildings'].append(building_data)
+                _data['buildings'].append(_building_data)
         # REGIONS
-        elif entity.dxf.layer in region_accessible_mapper.keys():
-            if entity.dxftype() == 'LWPOLYLINE' or entity.dxftype() == 'POLYLINE':
-                points = _get_entity_points_auto(entity)
-                region_data = {
-                    'points': points,
-                    'accessible': region_accessible_mapper[entity.dxf.layer],
-                    'region_type': region_type_mapper[entity.dxf.layer],
+        elif _entity.dxf.layer in region_accessible_mapper.keys():
+
+            if _entity.dxftype() == 'LWPOLYLINE' or _entity.dxftype() == 'POLYLINE':
+                _points = _get_entity_points_auto(_entity)
+                _region_data = {
+                    'points': _points,
+                    'accessible': region_accessible_mapper[_entity.dxf.layer],
+                    'region_type': region_type_mapper[_entity.dxf.layer],
                 }
-                data['regions'].append(region_data)
+                _data['regions'].append(_region_data)
     print('complete.')
-    return data
+    return _data
 
 
-def _get_entity_points_auto(entity):
-    if entity.dxftype() == 'LWPOLYLINE':
-        points = np.array(entity.get_points())
-        points = points[:, :2].tolist()
-        return points
-    elif entity.dxftype() == 'POLYLINE':
-        points = []
-        for point in entity.points():
-            points.append([point.xyz[0], point.xyz[1]])
-        return points
-    elif entity.dxftype() == 'LINE':
+def _get_entity_points_auto(_entity):
+    if _entity.dxftype() == 'LWPOLYLINE':
+        _points = np.array(_entity.get_points())
+        _points = _points[:, :2].tolist()
+        return _points
+    elif _entity.dxftype() == 'POLYLINE':
+        _points = []
+        for _pt in _entity.points():
+            _points.append([_pt.xyz[0], _pt.xyz[1]])
+        return _points
+    elif _entity.dxftype() == 'LINE':
 
-        return [(entity.dxf.start.xyz[0], entity.dxf.start.xyz[1]),
-                (entity.dxf.end.xyz[0], entity.dxf.end.xyz[1])]
+        return [(_entity.dxf.start.xyz[0], _entity.dxf.start.xyz[1]),
+                (_entity.dxf.end.xyz[0], _entity.dxf.end.xyz[1])]
     else:
         raise Exception('不支持的类型')
 
 
-@timer
-def save_data(data, path):
-    if path == '' or path is None:
+
+def save_data(_data, _path):
+    if _path == '' or _path is None:
         return
-    if not os.path.exists(os.path.dirname(path)):
-        os.makedirs(os.path.dirname(path))
-    with open(path, 'wb') as file:
-        pickle.dump(data, file)
-    print(f'data wrote to {path}')
+    if not os.path.exists(os.path.dirname(_path)):
+        os.makedirs(os.path.dirname(_path))
+    with open(_path, 'wb') as f:
+        pickle.dump(_data, f)
+    print(f'data wrote to {_path}')
 
 
-@timer
-def load_data(path):
-    with open(path, 'rb') as file:
-        data = pickle.load(file)
-    return data
+
+def load_data(_path):
+    with open(_path, 'rb') as f:
+        _data = pickle.load(f)
+    if _data['version'] != INFO_VERSION:
+        print(f"data数据版本（ {_data['version']} ）与现有版本({INFO_VERSION})不匹配，可能导致未知错误，请更新data")
+    return _data
 
 
 def open_file_window(**kwargs):
@@ -175,7 +175,7 @@ def save_file_window(**kwargs):
 
 
 if __name__ == "__main__":
-    dxf_path = "../../data/和县/现状条件.dxf"
+    dxf_path = "../../data/和县/excluded/现状条件.dxf"
     dxf_doc = load_dxf(dxf_path)
     data = dxf_to_data(dxf_doc)
     save_data(data, os.path.join(os.path.dirname(dxf_path), 'data.bin'))

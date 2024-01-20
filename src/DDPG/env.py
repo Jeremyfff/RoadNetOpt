@@ -85,7 +85,7 @@ class RoadNet:
             self.road_start_len = len(self.road_start)
 
             for point in list_points:
-                Road.add_road_by_coords(coords=point, level=RoadLevel.BRANCH,
+                Road.add_road_by_coords(coords=point, level=RoadLevel.TERTIARY,
                                         state=RoadState.OPTIMIZING)
             self.last_points = np.concatenate(list_points, axis=0)
             self.point_list.append(self.last_points)
@@ -113,7 +113,7 @@ class RoadNet:
             self.road_start = Road.get_all_roads()['geometry'].tolist()
             self.road_start_len = len(self.road_start)
             for point in list_points:
-                Road.add_road_by_coords(coords=point, level=RoadLevel.BRANCH,
+                Road.add_road_by_coords(coords=point, level=RoadLevel.TERTIARY,
                                         state=RoadState.OPTIMIZING)
         else:
             self.if_no_choice_roads = True

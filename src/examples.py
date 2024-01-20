@@ -55,51 +55,6 @@ def plot_obj(obj=None, output_folder=None, epoch=None, show_values=False):
     plt.clf()
 
 
-def main():
-    output_folder = "output"
-
-    # generate roads and buildings
-    existed_roads = Road.quick_roads()
-    existed_buildings = Building.quick_buildings()
-
-    # define static search space
-    point_grid = point_utils.point_grid(0, 0, 100, 100, 5)
-
-    # define fields
-    building_field = BuildingField()
-    attract_points = np.array([[99, 0], [56, 89]])
-    attract_field = AttractionField(attract_points)
-    attract_field.weight = 3
-    direction_field = DirectionField()
-    direction_field.weight = 0.2
-    momentum_field = MomentumField()
-    random_field = RandomField()
-    all_fields = [building_field, attract_field, direction_field, momentum_field, random_field]
-
-    # generate a new road
-    start_point = existed_roads[0].interpolate(0.4)
-    new_road = Road(np.array([start_point]),
-                    level=RoadLevel.BRANCH,
-                    state=RoadState.OPTIMIZING)
-
-    # define optimizer for this road
-    optimizer = RoadOptimizer(new_road, all_fields)
-
-    # optimize
-    for epoch in range(10):
-        print(f"epoch {epoch}")
-        optimizer.clear_rewards()
-        optimizer.get_rewards(point_grid)
-        optimizer.step()
-        # plotting
-        plot_obj(optimizer, output_folder, epoch, show_values=False)
-        for field in all_fields:
-            plot_obj(field, output_folder, epoch)
-
-    # end of optimization
-    new_road.state = RoadState.OPTIMIZED
-
-
 def example_data_to_roads():
     data = io_utils.load_data("../data/和县/data.bin")
     Road.data_to_roads(data)
@@ -127,7 +82,7 @@ def example_road_to_graph():
     # 遍历图中的每条边，根据 RoadLevel 属性来设置边的粗细
     for u, v, data in G.edges(data=True):
         road_level = data['level']
-        if road_level == RoadLevel.MAIN:
+        if road_level == RoadLevel.TRUNK:
             edge_width[(u, v)] = 5
         elif road_level == RoadLevel.SECONDARY:
             edge_width[(u, v)] = 3
@@ -204,7 +159,7 @@ def example_add_and_modify_road():
     my_road_start_point = np.array([[2, 3]])
     print(f'My road start point is {my_road_start_point}')
     # output: My road start point is [[2 3]]
-    my_road_uid = Road.add_road_by_coords(coords=my_road_start_point, level=RoadLevel.BRANCH,
+    my_road_uid = Road.add_road_by_coords(coords=my_road_start_point, level=RoadLevel.TERTIARY,
                                           state=RoadState.OPTIMIZING)
 
     my_road = Road.get_road_by_uid(my_road_uid)

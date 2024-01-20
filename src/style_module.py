@@ -5,27 +5,31 @@ import imgui
 from utils import io_utils
 from utils import RoadLevel, RoadState
 from utils import BuildingMovableType, BuildingStyle, BuildingQuality
-from utils import RegionAccessibleType
-
+from utils import RegionAccessibleType, RegionType
+from utils import INFO_VERSION
 
 class StyleScheme:
     """风格方案"""
+
     def __init__(self, name):
+        self.version = INFO_VERSION
         self.name = name
         self.ROAD_COLOR_BY_LEVEL = {
-            RoadLevel.MAIN: (0, 0, 0),
-            RoadLevel.SECONDARY: (0.2, 0.2, 0.2),
-            RoadLevel.BRANCH: (0.4, 0.4, 0.4),
-            RoadLevel.ALLEY: (0.6, 0.6, 0.6),
-            RoadLevel.CUSTOM: (0, 0, 0),
+            RoadLevel.TRUNK: (0, 0, 0),
+            RoadLevel.PRIMARY: (0.2, 0.2, 0.2),
+            RoadLevel.SECONDARY: (0.3, 0.3, 0.3),
+            RoadLevel.TERTIARY: (0.4, 0.4, 0.4),
+            RoadLevel.FOOTWAY: (0.6, 0.6, 0.6),
+            RoadLevel.UNDEFINED: (0, 0, 0),
         }
 
         self.ROAD_WIDTH_BY_LEVEL = {
-            RoadLevel.MAIN: 5,
+            RoadLevel.TRUNK: 5,
+            RoadLevel.PRIMARY: 4,
             RoadLevel.SECONDARY: 4,
-            RoadLevel.BRANCH: 3,
-            RoadLevel.ALLEY: 2,
-            RoadLevel.CUSTOM: 1,
+            RoadLevel.TERTIARY: 3,
+            RoadLevel.FOOTWAY: 2,
+            RoadLevel.UNDEFINED: 1,
         }
 
         self.ROAD_COLOR_BY_STATE = {
@@ -67,10 +71,10 @@ class StyleScheme:
             RegionAccessibleType.UNDEFINED: (0.6, 0.6, 0.6, 0.3)
         }
         self.REGION_COLOR_BY_TYPE = {
-            RegionAccessibleType.ACCESSIBLE: (0, 0, 0, 0.3),
-            RegionAccessibleType.RESTRICTED: (0.2, 0.2, 0.2, 0.3),
-            RegionAccessibleType.INACCESSIBLE: (0.4, 0.4, 0.4, 0.3),
-            RegionAccessibleType.UNDEFINED: (0.6, 0.6, 0.6, 0.3)
+            RegionType.ARTIFICIAL: (0, 0, 0, 0.3),
+            RegionType.WATER: (0.2, 0.2, 0.2, 0.3),
+            RegionType.BOUNDARY: (0.4, 0.4, 0.4, 0.3),
+            RegionType.UNDEFINED: (0.6, 0.6, 0.6, 0.3)
         }
 
         self.road_style_factory_dict = {'level': self.road_level_style_factory,
@@ -103,6 +107,9 @@ class StyleScheme:
     def load_from_file(self, file_path):
         with open(file_path, 'rb') as file:
             loaded_StyleScheme: 'StyleScheme' = pickle.load(file)
+        if not loaded_StyleScheme.version == self.version:
+            print(f'样式文件版本不匹配')
+            return
         print(f'[{self.name}] loading style from {file_path}')
         self.ROAD_COLOR_BY_LEVEL = loaded_StyleScheme.ROAD_COLOR_BY_LEVEL
         self.ROAD_WIDTH_BY_LEVEL = loaded_StyleScheme.ROAD_WIDTH_BY_LEVEL
@@ -167,9 +174,9 @@ class StyleScheme:
     def region_type_style_factory(self, regions):
         colors, face_color, edge_color, line_width = [], [], [], []
         for uid, region in regions.iterrows():
-            colors.append(self.REGION_COLOR_BY_TYPE[region['type']])
-            face_color.append(self.REGION_COLOR_BY_TYPE[region['type']])
-            edge_color.append(self.REGION_COLOR_BY_TYPE[region['type']])
+            colors.append(self.REGION_COLOR_BY_TYPE[region['region_type']])
+            face_color.append(self.REGION_COLOR_BY_TYPE[region['region_type']])
+            edge_color.append(self.REGION_COLOR_BY_TYPE[region['region_type']])
             line_width.append(1)
         return colors, face_color, edge_color, line_width
 
@@ -271,7 +278,8 @@ class StyleScheme:
 
     def show_imgui_building_style_by_movable_picker(self):
         any_changed = False
-        any_changed |= StyleScheme._imgui_color_picker_template('BUILDING_COLOR_BY_MOVABLE_TYPE', self.BUILDING_COLOR_BY_MOVABLE_TYPE)
+        any_changed |= StyleScheme._imgui_color_picker_template('BUILDING_COLOR_BY_MOVABLE_TYPE',
+                                                                self.BUILDING_COLOR_BY_MOVABLE_TYPE)
         return any_changed
 
     def show_imgui_building_style_by_style_picker(self):
@@ -304,7 +312,7 @@ class StyleScheme:
         road_style_changed = False
         building_style_changed = False
         region_style_changed = False
-        expanded, visible = imgui.collapsing_header(f'{self.name} 样式方案',flags= imgui.TREE_NODE_DEFAULT_OPEN)
+        expanded, visible = imgui.collapsing_header(f'{self.name} 样式方案', flags=imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
             if imgui.tree_node('basic settings', imgui.TREE_NODE_DEFAULT_OPEN):
                 changed, self.current_road_style_option = imgui.combo('road display:',
@@ -324,7 +332,7 @@ class StyleScheme:
 
                 imgui.tree_pop()
             if imgui.tree_node('advanced settings'):
-                disable_color = (0,0,0,0.2)
+                disable_color = (0, 0, 0, 0.2)
                 if self.get_current_road_style_factory_name() == 'level':
                     road_style_changed |= self.show_imgui_road_style_by_level_picker()
                     imgui.push_style_color(imgui.COLOR_HEADER, *disable_color)
@@ -375,12 +383,10 @@ class StyleScheme:
                         self.load_from_file(path)
                 if imgui.button('保存配置'):
                     path = io_utils.save_file_window(defaultextension='.style',
-                                              filetypes=[('Style Files', '.style')])
+                                                     filetypes=[('Style Files', '.style')])
                     if path is not None and path != '':
                         self.save_to_file(path)
                 imgui.tree_pop()
-
-
 
         if road_style_changed and road_style_change_callback:
             road_style_change_callback()
@@ -402,4 +408,3 @@ class StyleManager:
 
 
 style_manager = StyleManager()
-

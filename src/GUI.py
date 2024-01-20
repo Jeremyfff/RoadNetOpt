@@ -8,6 +8,8 @@ import ctypes
 import importlib
 import pyautogui
 
+import geo
+from geo import road, building, region
 import graphic_module
 
 from gui import icon_module
@@ -68,6 +70,12 @@ def imgui_debug_window():
     if imgui.button('reload icon_module.py'):
         importlib.reload(icon_module)
     imgui.text('package geo')
+    if imgui.button('reload road'):
+        importlib.reload(road)
+    if imgui.button('reload building'):
+        importlib.reload(building)
+    if imgui.button('reload region'):
+        importlib.reload(region)
     imgui.text('package utils')
     imgui.text('package DDPG')
     if imgui.button('reload env'):
@@ -85,7 +93,7 @@ def main():
 
     pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
     pygame.display.set_caption('路网织补工具 V0.1')
-
+    clock = pygame.time.Clock()
     imgui.create_context()
     impl = PygameRenderer()
 
@@ -135,6 +143,7 @@ def main():
         impl.render(imgui.get_draw_data())
 
         pygame.display.flip()
+        clock.tick(60)
 
 
 if __name__ == "__main__":

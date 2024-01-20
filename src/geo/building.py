@@ -1,7 +1,10 @@
+import traceback
 import uuid
 from collections import defaultdict
 import geopandas as gpd
 import numpy as np
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import Polygon as PolygonPatch
 from shapely.geometry import Polygon
 import shapely.plotting
 from tqdm import tqdm
@@ -13,13 +16,14 @@ from utils.point_utils import xywh2points
 from utils import BuildingMovableType, BuildingStyle, BuildingQuality, BuildingCluster
 import style_module
 
-
+print('building loaded')
 class Building(Object):
-    __building_attrs = ['uid', 'geometry', 'enabled', 'movable', 'style', 'quality']
+    __building_attrs = ['uid', 'geometry', 'enabled', 'movable', 'style', 'quality', 'patch']
     __building_gdf = gpd.GeoDataFrame(columns=__building_attrs)
     __building_gdf.set_index('uid')
 
     __uid = uuid.uuid4()
+
 
     @staticmethod
     def uid():
@@ -42,13 +46,15 @@ class Building(Object):
                                      quality: BuildingQuality = BuildingQuality.UNDEFINED,
                                      enabled: bool = True):
         uid = uuid.uuid4()
+        patch = PolygonPatch(np.asarray(geometry.exterior.coords))
         new_row = {
             'uid': [uid],
             'geometry': [geometry],
             'movable': [movable],
             'style': [style],
             'quality': [quality],
-            'enabled': [enabled]
+            'enabled': [enabled],
+            'patch': [patch]
         }
         return gpd.GeoDataFrame(new_row, index=new_row['uid'])
 
@@ -79,13 +85,15 @@ class Building(Object):
             quality_list = [BuildingQuality.UNDEFINED for _ in geometry_list]
         assert len(geometry_list) == len(movable_list) == len(style_list) == len(quality_list)
         uid_list = [uuid.uuid4() for _ in geometry_list]
+        patch_list = [PolygonPatch(np.asarray(geometry.exterior.coords)) for geometry in geometry_list]
         new_data = {
             'uid': uid_list,
             'geometry': geometry_list,
             'movable': movable_list,
             'style': style_list,
             'quality': quality_list,
-            'enabled': enable_list
+            'enabled': enable_list,
+            'patch': patch_list
         }
         return gpd.GeoDataFrame(new_data, index=new_data['uid'])
 
@@ -269,6 +277,17 @@ class Building(Object):
                             edgecolor=buildings_copy['edge_color'],
                             linewidth=buildings_copy['line_width'],
                             *args, **kwargs)
+
+
+    @staticmethod
+    def plot_patch_using_style_factory(buildings, style_factory, *args, **kwargs):
+        ax = kwargs['ax']
+        kwargs.pop('ax')
+        colors, face_color, edge_color, line_width = style_factory(buildings)
+        patches = buildings['patch'].tolist()
+        pc = PatchCollection(patches, facecolor=face_color, linewidth=line_width, edgecolor=edge_color, *args, **kwargs)
+        ax.add_collection(pc, autolim=True)
+        return pc
 
     # endregion
 
