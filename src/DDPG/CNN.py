@@ -30,7 +30,7 @@ class CNN(nn.Module):
         return self.CNN(x)
 
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-A = CNN().to(device)
-print(A)
-summary(A, input_size=(4, 512, 512))
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# A = CNN().to(device)
+# print(A)
+# summary(A, input_size=(4, 512, 512))
