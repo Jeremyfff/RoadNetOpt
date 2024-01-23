@@ -1,0 +1,67 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>RoadNetOptAccelerator</name>
+    </assembly>
+    <members>
+        <member name="T:RoadNetOptAccelerator.CAccelerator">
+            <summary>
+            加速类
+            </summary>
+        </member>
+        <member name="M:RoadNetOptAccelerator.CAccelerator.Add(System.Int32,System.Int32)">
+            <summary>
+            加法，测试用
+            </summary>
+            <param name="a"></param>
+            <param name="b"></param>
+            <returns></returns>
+        </member>
+        <member name="M:RoadNetOptAccelerator.CAccelerator.SetMaxChunks(System.Int32)">
+            <summary>
+            设置最大并行计算线程数
+            </summary>
+            <param name="num"></param>
+        </member>
+        <member name="M:RoadNetOptAccelerator.CAccelerator.SetMinGeoPerChunk(System.Int32)">
+            <summary>
+            设置每个计算线程分配到的最少的几何体数量
+            </summary>
+            <param name="num"></param>
+        </member>
+        <member name="M:RoadNetOptAccelerator.CAccelerator.TriangulatePolylines(System.Byte[],System.Byte[],System.Byte[],System.Byte[],System.Byte[])">
+            <summary>
+            将输入的polyline 变为有宽度的三角顶点，并返回顶点数据
+            </summary>
+            <param name="bVertices"> 所有顶点的xy坐标(float32, float32) 4 + 4 bytes</param>
+            <param name="bFirst">每组折线的第一个顶点的编号(int32) 4 bytes </param>
+            <param name="bNumVerticesPerPolyline">每组折线的顶点数(int32) 4 bytes </param>
+            <param name="bColors">每组折线的颜色(float32, float32, float32, float32) 4 + 4 + 4 + 4 bytes</param>
+            <param name="bWidths">每组折线的宽度(float32) 4 bytes </param>
+            <returns>赋予宽度并三角化后的顶点数据
+            (x      , y      , r      , g      , b      , a      )
+            (float32, float32, float32, float32, float32, float32)
+            (4      , 4      , 4      , 4      , 4      , 4      )bytes
+            </returns>
+        </member>
+        <member name="M:RoadNetOptAccelerator.CAccelerator.TriangulatePolygons(System.Byte[],System.Byte[],System.Byte[],System.Byte[])">
+            <summary>
+            将输入的polygon 进行三角剖分，并返回顶点数据
+            </summary>
+            <param name="bVertices">所有顶点的xy坐标(float32, float32) 4 + 4 bytes</param>
+            <param name="bFirst">每个多边形的第一个顶点的编号(int32) 4 bytes </param>
+            <param name="bNumVerticesPerPolygon">每个多边形的顶点数(int32) 4 bytes </param>
+            <param name="bColors">每个多边形的颜色(float32, float32, float32, float32) 4 + 4 + 4 + 4 bytes</param>
+            <returns></returns>
+        </member>
+        <member name="M:RoadNetOptAccelerator.CAccelerator.TriangulatePoints(System.Byte[],System.Byte[],System.Byte[])">
+            <summary>
+            
+            </summary>
+            <param name="bVertices"></param>
+            <param name="bColors"></param>
+            <param name="bWidths"></param>
+            <returns></returns>
+        </member>
+    </members>
+</doc>

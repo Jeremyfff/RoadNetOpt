@@ -19,3 +19,4 @@ tqdm
 pympler
 opencv-python
 pyautogui
+moderngl

@@ -1,3 +1,5 @@
+import os
+
 import imgui
 import pygame
 
@@ -8,8 +10,8 @@ from gui.icon_module import Spinner, IconManager
 
 def init_font(impl):
     io = imgui.get_io()
-    g.mChineseFont = io.fonts.add_font_from_file_ttf(
-        "../fonts/Deng.ttf", g.FONT_SIZE * g.FONT_SCALING_FACTOR,
+    g.mChineseFont = io.fonts.add_font_from_file_ttf(os.path.join(g.RESOURCE_DIR, 'fonts/Deng.ttf'),
+                                                     g.FONT_SIZE * g.FONT_SCALING_FACTOR,
         glyph_ranges=io.fonts.get_glyph_ranges_chinese_full()
     )
     io.font_global_scale /= g.FONT_SCALING_FACTOR
@@ -48,8 +50,8 @@ def push_dark():
     IconManager.set_mode(True)
     Spinner.set_mode(True)
 
-    icon = pygame.image.load('../textures/light/road-fill.png')
-    pygame.display.set_icon(icon)
+    # icon = pygame.image.load(os.path.join(g.RESOURCE_DIR, 'textures/light/road-fill.png)'))
+    # pygame.display.set_icon(icon)
 
     g.DARK_MODE = True
 
@@ -60,7 +62,7 @@ def push_light():
     IconManager.set_mode(False)
     Spinner.set_mode(False)
 
-    icon = pygame.image.load('../textures/dark/road-fill.png')
-    pygame.display.set_icon(icon)
+    # icon = pygame.image.load(os.path.join(g.RESOURCE_DIR, 'textures/dark/road-fill.png)'))
+    # pygame.display.set_icon(icon)
 
     g.DARK_MODE = False

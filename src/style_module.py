@@ -2,11 +2,14 @@ import os.path
 import pickle
 
 import imgui
-from utils import io_utils
+import numpy as np
+
+from utils import io_utils, common_utils
 from utils import RoadLevel, RoadState
 from utils import BuildingMovableType, BuildingStyle, BuildingQuality
 from utils import RegionAccessibleType, RegionType
 from utils import INFO_VERSION
+
 
 class StyleScheme:
     """风格方案"""
@@ -15,12 +18,12 @@ class StyleScheme:
         self.version = INFO_VERSION
         self.name = name
         self.ROAD_COLOR_BY_LEVEL = {
-            RoadLevel.TRUNK: (0, 0, 0),
-            RoadLevel.PRIMARY: (0.2, 0.2, 0.2),
-            RoadLevel.SECONDARY: (0.3, 0.3, 0.3),
-            RoadLevel.TERTIARY: (0.4, 0.4, 0.4),
-            RoadLevel.FOOTWAY: (0.6, 0.6, 0.6),
-            RoadLevel.UNDEFINED: (0, 0, 0),
+            RoadLevel.TRUNK: (0, 0, 0, 1),
+            RoadLevel.PRIMARY: (0.2, 0.2, 0.2, 1),
+            RoadLevel.SECONDARY: (0.3, 0.3, 0.3, 1),
+            RoadLevel.TERTIARY: (0.4, 0.4, 0.4, 1),
+            RoadLevel.FOOTWAY: (0.6, 0.6, 0.6, 1),
+            RoadLevel.UNDEFINED: (0, 0, 0, 1),
         }
 
         self.ROAD_WIDTH_BY_LEVEL = {
@@ -33,9 +36,9 @@ class StyleScheme:
         }
 
         self.ROAD_COLOR_BY_STATE = {
-            RoadState.RAW: (0, 0, 0),
-            RoadState.OPTIMIZED: (0.2, 0.2, 0.2),
-            RoadState.OPTIMIZING: (0.4, 0.4, 0.4),
+            RoadState.RAW: (0, 0, 0, 1),
+            RoadState.OPTIMIZED: (0.2, 0.2, 0.2, 1),
+            RoadState.OPTIMIZING: (0.4, 0.4, 0.4, 1),
         }
         self.ROAD_WIDTH_BY_STATE = {
             RoadState.RAW: 3,
@@ -44,24 +47,24 @@ class StyleScheme:
         }
 
         self.BUILDING_COLOR_BY_MOVABLE_TYPE = {
-            BuildingMovableType.NONDEMOLISHABLE: (0, 0, 0),
-            BuildingMovableType.FLEXABLE: (0.2, 0.2, 0.2),
-            BuildingMovableType.DEMOLISHABLE: (0.4, 0.4, 0.4),
-            BuildingMovableType.UNDEFINED: (0.6, 0.6, 0.6)
+            BuildingMovableType.NONDEMOLISHABLE: (0, 0, 0, 1),
+            BuildingMovableType.FLEXABLE: (0.2, 0.2, 0.2, 1),
+            BuildingMovableType.DEMOLISHABLE: (0.4, 0.4, 0.4, 1),
+            BuildingMovableType.UNDEFINED: (0.6, 0.6, 0.6, 1)
         }
         self.BUILDING_COLOR_BY_STYLE = {
-            BuildingStyle.HERITAGE: (0, 0, 0),
-            BuildingStyle.HISTORICAL: (0.2, 0.2, 0.2),
-            BuildingStyle.TRADITIONAL: (0.4, 0.4, 0.4),
-            BuildingStyle.NORMAL: (0.6, 0.6, 0.6),
-            BuildingStyle.UNDEFINED: (0.8, 0.8, 0.8),
+            BuildingStyle.HERITAGE: (0, 0, 0, 1),
+            BuildingStyle.HISTORICAL: (0.2, 0.2, 0.2, 1),
+            BuildingStyle.TRADITIONAL: (0.4, 0.4, 0.4, 1),
+            BuildingStyle.NORMAL: (0.6, 0.6, 0.6, 1),
+            BuildingStyle.UNDEFINED: (0.8, 0.8, 0.8, 1),
         }
 
         self.BUILDING_COLOR_BY_QUALITY = {
-            BuildingQuality.GOOD: (0, 0, 0),
-            BuildingQuality.FAIR: (0.2, 0.2, 0.2),
-            BuildingQuality.POOR: (0.4, 0.4, 0.4),
-            BuildingQuality.UNDEFINED: (0.6, 0.6, 0.6)
+            BuildingQuality.GOOD: (0, 0, 0, 1),
+            BuildingQuality.FAIR: (0.2, 0.2, 0.2, 1),
+            BuildingQuality.POOR: (0.4, 0.4, 0.4, 1),
+            BuildingQuality.UNDEFINED: (0.6, 0.6, 0.6, 1)
         }
 
         self.REGION_COLOR_BY_ACCESSIBLE = {
@@ -122,63 +125,76 @@ class StyleScheme:
         self.REGION_COLOR_BY_TYPE = loaded_StyleScheme.REGION_COLOR_BY_TYPE
 
     def road_level_style_factory(self, roads):
-        colors, width = [], []
-        for uid, road in roads.iterrows():
-            colors.append(self.ROAD_COLOR_BY_LEVEL[road['level']])
-            width.append(self.ROAD_WIDTH_BY_LEVEL[road['level']])
+        colors = np.array(roads['level'].map(self.ROAD_COLOR_BY_LEVEL).values.tolist())
+        width = np.array(roads['level'].map(self.ROAD_WIDTH_BY_LEVEL).values.tolist())
         return colors, width
 
     def road_state_style_factory(self, roads):
-        colors, width = [], []
-        for uid, road in roads.iterrows():
-            colors.append(self.ROAD_COLOR_BY_STATE[road['state']])
-            width.append(self.ROAD_WIDTH_BY_STATE[road['state']])
+        colors = np.array(roads['state'].map(self.ROAD_COLOR_BY_STATE).values.tolist())
+        width = np.array(roads['state'].map(self.ROAD_WIDTH_BY_STATE).values.tolist())
+        return colors, width
+
+    def road_idx_style_factory(self, roads):
+        _ = self
+        if roads is None:
+            return
+        num = len(roads)
+        arr_int32 = np.arange(num).astype(np.int32).reshape(num, 1)
+        arr_uint8 = arr_int32.view(np.uint8).reshape(arr_int32.shape[0], 4)
+        arr_float32 = arr_uint8.astype(np.float32)
+        colors = arr_float32
+        width = np.full(num, 5).astype(np.float32)
+        return colors, width
+
+    def road_highlight_style_factory(self, roads):
+        _ = self
+        if roads is None:
+            return
+        num = len(roads)
+        width = np.full(num, 5)
+        colors = np.full((num, 4), [0, 1, 0, 1])
+        return colors, width
+
+    def node_style_factory(self, nodes):
+        _ = self
+        if nodes is None:
+            return
+        num = len(nodes)
+        width = np.full(num, 10)
+        colors = np.full((num, 4), [0.5, 0.5, 1, 1])
         return colors, width
 
     def building_movable_style_factory(self, buildings):
-        colors, face_color, edge_color, line_width = [], [], [], []
-        for uid, building in buildings.iterrows():
-            colors.append(self.BUILDING_COLOR_BY_MOVABLE_TYPE[building['movable']])
-            face_color.append(self.BUILDING_COLOR_BY_MOVABLE_TYPE[building['movable']])
-            edge_color.append(self.BUILDING_COLOR_BY_MOVABLE_TYPE[building['movable']])
-            line_width.append(0)
-        return colors, face_color, edge_color, line_width
+        colors = np.array(buildings['movable'].map(self.BUILDING_COLOR_BY_MOVABLE_TYPE).values.tolist())
+        face_color = colors
+        edge_color = colors
+        return colors, face_color, edge_color
 
     def building_style_style_factory(self, buildings):
-        colors, face_color, edge_color, line_width = [], [], [], []
-        for uid, building in buildings.iterrows():
-            colors.append(self.BUILDING_COLOR_BY_STYLE[building['style']])
-            face_color.append(self.BUILDING_COLOR_BY_STYLE[building['style']])
-            edge_color.append(self.BUILDING_COLOR_BY_STYLE[building['style']])
-            line_width.append(0)
-        return colors, face_color, edge_color, line_width
+        colors = np.array(buildings['style'].map(self.BUILDING_COLOR_BY_STYLE).values.tolist())
+        face_color = colors
+        edge_color = colors
+        return colors, face_color, edge_color
 
     def building_quality_style_factory(self, buildings):
-        colors, face_color, edge_color, line_width = [], [], [], []
-        for uid, building in buildings.iterrows():
-            colors.append(self.BUILDING_COLOR_BY_QUALITY[building['quality']])
-            face_color.append(self.BUILDING_COLOR_BY_QUALITY[building['quality']])
-            edge_color.append(self.BUILDING_COLOR_BY_QUALITY[building['quality']])
-            line_width.append(1)
-        return colors, face_color, edge_color, line_width
+        colors = np.array(buildings['quality'].map(self.BUILDING_COLOR_BY_STYLE).values.tolist())
+        face_color = colors
+        edge_color = colors
+        return colors, face_color, edge_color
 
     def region_accessible_style_factory(self, regions):
-        colors, face_color, edge_color, line_width = [], [], [], []
-        for uid, region in regions.iterrows():
-            colors.append(self.REGION_COLOR_BY_ACCESSIBLE[region['accessible']])
-            face_color.append(self.REGION_COLOR_BY_ACCESSIBLE[region['accessible']])
-            edge_color.append(self.REGION_COLOR_BY_ACCESSIBLE[region['accessible']])
-            line_width.append(1)
-        return colors, face_color, edge_color, line_width
+        colors = np.array(regions['accessible'].map(self.REGION_COLOR_BY_ACCESSIBLE).values.tolist())
+        face_color = colors
+        edge_color = colors
+        return colors, face_color, edge_color
+
 
     def region_type_style_factory(self, regions):
-        colors, face_color, edge_color, line_width = [], [], [], []
-        for uid, region in regions.iterrows():
-            colors.append(self.REGION_COLOR_BY_TYPE[region['region_type']])
-            face_color.append(self.REGION_COLOR_BY_TYPE[region['region_type']])
-            edge_color.append(self.REGION_COLOR_BY_TYPE[region['region_type']])
-            line_width.append(1)
-        return colors, face_color, edge_color, line_width
+        colors = np.array(regions['region_type'].map(self.REGION_COLOR_BY_TYPE).values.tolist())
+        face_color = colors
+        edge_color = colors
+        return colors, face_color, edge_color
+
 
     def get_road_style_factory_by_name(self, name: str):
         return self.road_style_factory_dict[name]
@@ -244,7 +260,12 @@ class StyleScheme:
         if expanded:
             for key in _dict:
                 cs = _dict[key]
-                changed, cs = imgui.color_edit3(str(key), cs[0], cs[1], cs[2])
+                if len(cs) == 3:
+                    changed, cs = imgui.color_edit3(str(key), cs[0], cs[1], cs[2])
+                elif len(cs) == 4:
+                    changed, cs = imgui.color_edit4(str(key), cs[0], cs[1], cs[2], cs[3])
+                else:
+                    raise Exception('不支持的色彩格式')
                 any_changed |= changed
                 if changed:
                     _dict[key] = cs
@@ -398,13 +419,23 @@ class StyleScheme:
 
 class StyleManager:
     instance: 'StyleManager' = None
+    I: 'StyleManager' = None  # 缩写
 
     def __init__(self):
         assert StyleManager.instance is None
         StyleManager.instance = self
+        StyleManager.I = self
 
         self.display_style = StyleScheme('DISPLAY')
         self.env_style = StyleScheme('ENV')
+
+    @property
+    def dis(self):
+        return self.display_style
+
+    @property
+    def env(self):
+        return self.env_style
 
 
 style_manager = StyleManager()

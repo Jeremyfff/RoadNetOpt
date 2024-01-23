@@ -3,6 +3,11 @@ import logging
 import numpy as np
 import time
 import imgui
+import shapely
+from shapely import Polygon
+from shapely.ops import triangulate
+import geopandas as gpd
+from geovoronoi import voronoi_regions_from_coords
 
 
 def get_arg(kwargs: dict, name: str, default: any = None):
@@ -45,6 +50,15 @@ def timer(func):
         return result
 
     return wrapper
+
+
+def to_triangles(polygon):
+    delauney: list[Polygon] = triangulate(polygon)
+    triangles = []
+    for triangle in delauney:
+        if shapely.within(triangle.centroid, polygon):
+            triangles.append(triangle)
+    return triangles
 
 
 class DuplicateFilter:
@@ -92,9 +106,6 @@ def duplicate_filter(logger):
         return wrapper
 
     return decorator
-
-
-
 
 
 if __name__ == '__main__':

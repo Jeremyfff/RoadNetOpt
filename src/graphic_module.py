@@ -1,17 +1,20 @@
 import logging
 import matplotlib
+import moderngl
+import numpy as np
 from OpenGL.GL import *
+from PIL import Image
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import matplotlib.pyplot as plt
 from datetime import datetime
-from geopandas import GeoDataFrame
+from moderngl_window.opengl.vao import VAO
 import imgui
 import geopandas as gpd
 import torch
 from typing import *
-
+from gui import global_var as g
 from geo import Road, Building, Region
-from style_module import StyleManager
+from style_module import StyleManager as sm
 from utils import RoadCluster, BuildingCluster, RegionCluster
 from utils import common_utils
 from utils.common_utils import timer
@@ -19,25 +22,6 @@ from utils import graphic_uitls
 from gui.icon_module import IconManager, Spinner
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-def plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
-                  **kwargs):
-    logging.warning(
-        'graphic_modlue.plot_as_array功能已被迁移至graphic_uitls中，请使用graphic_uitls.plot_as_array\n您调用的方法将在未来被删除，请及时调整代码')
-    return graphic_uitls.plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False,
-                                       tensor=True,
-                                       **kwargs)
-
-
-@timer
-def plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
-                   **kwargs):
-    logging.warning(
-        'graphic_modlue.plot_as_array2功能已被迁移至graphic_uitls中，请使用graphic_uitls.plot_as_array2\n您调用的方法将在未来被删除，请及时调整代码')
-    return graphic_uitls.plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True,
-                                        antialiased=False, tensor=True,
-                                        **kwargs)
 
 
 class GraphicTexture:
@@ -56,10 +40,13 @@ class GraphicTexture:
         self.update_size(width, height)
 
     def update_size(self, width, height):
+        """更新self.width和height变量，创建空白图像，更新texture id"""
         print(f'[update_size]update size to {width}, {height}')
         self.width = width
         self.height = height
-        self.blank_img_data = torch.zeros((self.height, self.width, 4), dtype=torch.uint8)
+        self.blank_img_data = torch.zeros((self.height, self.width, 3), dtype=torch.uint8)
+        if self.texture_id is not None:
+            graphic_uitls.remove_texture(texture_id=self.texture_id)
         self.texture_id = graphic_uitls.create_texture_from_array(self.blank_img_data)
 
     def bilt_data(self, data, auto_cache=True):
@@ -135,7 +122,7 @@ class MainGraphTexture(GraphicTexture):
             imgui.open_popup('warning')
         if imgui.begin_popup_modal('warning',
                                    flags=imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_ALWAYS_AUTO_RESIZE).opened:
-            size = imgui.get_window_size()
+            size = g.mWindowSize
             imgui.text('不能关闭道路的显示')
             if imgui.button('知道了', width=size.x - 16, height=22):
                 imgui.close_current_popup()
@@ -172,7 +159,6 @@ class MainGraphTexture(GraphicTexture):
         if clicked:
             self._any_change = True
 
-
         if road_changed:
             self.clear_road_data()
         if building_changed:
@@ -208,7 +194,7 @@ class MainGraphTexture(GraphicTexture):
             img_data, ax = self._wrapped_plot_as_array2(Road.plot_using_style_factory,
                                                         x_lim=self.x_lim,
                                                         roads=Road.get_roads_by_cluster(self._road_cluster),
-                                                        style_factory=StyleManager.instance.display_style.get_current_road_style_factory())
+                                                        style_factory=sm.I.dis.get_current_road_style_factory())
             if self.x_lim is None:
                 # 只有在第一次的时候才更新
                 self.x_lim = ax.get_xlim()
@@ -228,7 +214,7 @@ class MainGraphTexture(GraphicTexture):
                                                         x_lim=self.x_lim,
                                                         buildings=Building.get_buildings_by_cluster(
                                                             self._building_cluster),
-                                                        style_factory=StyleManager.instance.display_style.get_current_building_style_factory())
+                                                        style_factory=sm.I.dis.get_current_building_style_factory())
             self.cached_building_data = img_data
             self.cached_building_uid = Building.uid()
             self._any_change = True
@@ -241,7 +227,7 @@ class MainGraphTexture(GraphicTexture):
             img_data, ax = self._wrapped_plot_as_array2(Region.plot_using_style_factory,
                                                         x_lim=self.x_lim,
                                                         regions=Region.get_regions_by_cluster(self._region_cluster),
-                                                        style_factory=StyleManager.instance.display_style.get_current_region_style_factory())
+                                                        style_factory=sm.I.dis.get_current_region_style_factory())
             self.cached_region_data = img_data
             self.cached_region_uid = Region.uid()
             self._any_change = True
@@ -352,10 +338,11 @@ class MainGraphTexture(GraphicTexture):
             blended = graphic_uitls.blend_img_data(blended, road_data)
             blended = graphic_uitls.blend_img_data(blended, highlight_data)
             if self.enable_render_nodes:
-                blended = graphic_uitls.blend_img_data(blended,node_data)
+                blended = graphic_uitls.blend_img_data(blended, node_data)
             self.bilt_data(blended, auto_cache=False)
 
         self._any_change = False  # reset to False
+
     def clear_cache(self):
         self.cached_data = None
         self.cached_road_data = None
@@ -390,24 +377,391 @@ class MainGraphTexture(GraphicTexture):
         self.y_lim = None
 
 
+class SimpleTexture:
+    def __init__(self, name, width, height, channel=4):
+        self.name = name
+        self.width, self.height, self.channel = width, height, channel
+        self.exposed = True
+        self.ctx = g.mCtx
+        self.texture = self.ctx.texture((width, height), channel, None)
+        self.x_lim = None
+        self.y_lim = None
+        g.mModernglWindowRenderer.register_texture(self.texture)
+
+    @property
+    def texture_id(self):
+        return self.texture.glo
+
+    def bilt_data(self, data):
+        height, width, channel = data.shape
+        if height != self.height or width != self.width or channel != self.channel:
+            g.mModernglWindowRenderer.remove_texture(self.texture)
+            self.texture = g.mCtx.texture((width, height), channel, data.tobytes())
+            self.height, self.width, self.channel = height, width, channel
+            g.mModernglWindowRenderer.register_texture(self.texture)
+        else:
+            self.texture.write(data.tobytes())
+
+
+class FrameBufferTexture:
+    """
+    使用moderngl的 framebuffer作为渲染画布的高级包装texture对象
+    此类为基类， 实现了基础属性的获取与修改，支持改变texture的尺寸并自动注册和销毁
+    要对该texture进行修改，需要继承该类的render方法并对其进行自定义修改
+
+    """
+
+    def __init__(self, name, width, height, channel=4):
+        self.name = name
+        self.width, self.height, self.channel = width, height, channel
+        self.exposed = True
+        self.ctx = g.mCtx
+        self.fbo = self.ctx.framebuffer(
+            color_attachments=self.ctx.texture((width, height), 4)
+        )
+        g.mModernglWindowRenderer.register_texture(self.fbo.color_attachments[0])
+
+    @property
+    def texture(self):
+        return self.fbo.color_attachments[0]
+
+    @property
+    def texture_id(self):
+        return self.texture.glo
+
+    def update_size(self, width, height):
+        g.mModernglWindowRenderer.remove_texture(self.fbo.color_attachments[0])
+        self.width, self.height = width, height
+
+        self.fbo = self.ctx.framebuffer(
+            color_attachments=self.ctx.texture((width, height), 4)
+        )
+        g.mModernglWindowRenderer.register_texture(self.fbo.color_attachments[0])
+        print(f'texture size updated to {self.width, self.height}, id = {self.fbo.color_attachments[0].glo}')
+
+    def render(self, **kwargs):
+        pass
+
+
+class MainFrameBufferTexture(FrameBufferTexture):
+    def __init__(self, name, width, height):
+        super().__init__(name, width, height)
+
+        # clusters
+        self._road_cluster = RoadCluster()
+        self._building_cluster = BuildingCluster()
+        self._region_cluster = RegionCluster()
+
+        # lims
+        self.x_lim = None
+        self.y_lim = None
+
+        # params
+        self.enable_render_roads = True
+        self.enable_render_buildings = False
+        self.enable_render_regions = False
+        self.enable_render_nodes = False
+
+        self._any_change = False
+
+        self._need_check_roads = True
+        self._need_check_buildings = True
+        self._need_check_regions = True
+        self._need_check_nodes = True
+        self._need_check_highlighted_roads = True
+        self._need_check_road_idx = True
+
+        # caches
+        self.cached_road_uid = None
+        self.cached_building_uid = None
+        self.cached_region_uid = None
+
+        # vertex array objects, buffer and programs
+        _rsf = sm.I.dis.get_current_road_style_factory()
+        _bsf = sm.I.dis.get_current_building_style_factory()
+        _resf = sm.I.dis.get_current_region_style_factory()
+        _nsf = sm.I.dis.node_style_factory
+        _hsf = sm.I.dis.road_highlight_style_factory
+
+        self.road_gl = graphic_uitls.RoadGL('road', _rsf)
+        self.building_gl = graphic_uitls.BuildingGL('building', _bsf)
+        self.region_gl = graphic_uitls.RegionGL('region', _resf)
+        self.node_gl = graphic_uitls.NodeGL('node', _nsf)
+        self.highlighted_road_gl = graphic_uitls.RoadGL('highlighted_road', _hsf)
+
+    def show_imgui_display_editor(self):
+        road_changed = False
+        building_changed = False
+        region_changed = False
+        # roads
+        IconManager.imgui_icon('road-fill')
+        imgui.same_line()
+        clicked, self.enable_render_roads = imgui.checkbox('render roads', True)
+        if clicked:
+            imgui.open_popup('warning')
+        if imgui.begin_popup_modal('warning',
+                                   flags=imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_ALWAYS_AUTO_RESIZE).opened:
+            size = g.mWindowSize
+            imgui.text('不能关闭道路的显示')
+            if imgui.button('知道了', width=size.x - 16, height=22):
+                imgui.close_current_popup()
+            imgui.end_popup()
+        if self.enable_render_roads:
+            imgui.indent()
+            road_changed |= self._road_cluster.show_imgui_cluster_editor_button()
+            imgui.unindent()
+        # buildings
+        IconManager.imgui_icon('building-fill')
+        imgui.same_line()
+        clicked, self.enable_render_buildings = imgui.checkbox('render buildings', self.enable_render_buildings)
+        if clicked:
+            self._any_change = True
+        if self.enable_render_buildings:
+            imgui.indent()
+            building_changed |= self._building_cluster.show_imgui_cluster_editor_button()
+            imgui.unindent()
+        # regions
+        IconManager.imgui_icon('polygon')
+        imgui.same_line()
+        clicked, self.enable_render_regions = imgui.checkbox('render regions', self.enable_render_regions)
+        if clicked:
+            self._any_change = True
+        if self.enable_render_regions:
+            imgui.indent()
+            region_changed |= self._region_cluster.show_imgui_cluster_editor_button()
+            imgui.unindent()
+
+        # nodes
+        IconManager.imgui_icon('vector-polygon')
+        imgui.same_line()
+        clicked, self.enable_render_nodes = imgui.checkbox('render nodes', self.enable_render_nodes)
+        if clicked:
+            self._any_change = True
+
+        if road_changed:
+            self.clear_road_data()
+        if building_changed:
+            self.clear_building_data()
+        if region_changed:
+            self.clear_region_data()
+
+    def _in_regions(self, pos):
+        return 0 <= pos[0] < self.width and 0 <= pos[1] < self.height
+
+    def _check_roads(self):
+        """
+        检查roads是否需要更新，两种情况会导致其进行更新操作：
+        1. self._need_check_roads被设置为True
+        2. Road.uid 发生了变化，此处的uid为Road类的整体uid，当Road类发生任何变化都会使该值发生变化。
+           当使用road cluster筛选出特定的道路进行显示时， 当未显示的road发生变化时，也会进行更新
+            下述的所有check与之相同，不再赘述
+        :return:
+        """
+        if self._need_check_roads or self.cached_road_uid != Road.uid():
+
+            self.road_gl.set_gdf(Road.get_roads_by_cluster(self._road_cluster))
+            self.road_gl.set_style_factory(sm.I.dis.get_current_road_style_factory())
+            self.road_gl.update_buffer()
+
+            if self.cached_road_uid != Road.uid():
+                # 当road结构发生变化时，将相关变量设为需要检查
+                self._need_check_nodes = True
+                self._need_check_road_idx = True
+
+            self.cached_road_uid = Road.uid()
+            self._need_check_roads = False
+            self._any_change = True
+
+            return True
+        else:
+            return False
+
+    def _check_buildings(self):
+        if self._need_check_buildings or self.cached_building_uid != Building.uid():
+            self.building_gl.set_gdf(Building.get_buildings_by_cluster(self._building_cluster))
+            self.building_gl.set_style_factory(sm.I.dis.get_current_building_style_factory())
+            self.building_gl.update_buffer()
+
+            self.cached_building_uid = Building.uid()
+            self._need_check_buildings = False
+            self._any_change = True
+            return True
+        else:
+            return False
+
+    def _check_regions(self):
+        if self._need_check_regions or self.cached_region_uid != Region.uid():
+            self.region_gl.set_gdf(Region.get_regions_by_cluster(self._region_cluster))
+            self.region_gl.set_style_factory(sm.I.dis.get_current_region_style_factory())
+            self.region_gl.update_buffer()
+
+            self.cached_region_uid = Region.uid()
+            self._need_check_regions = False
+            self._any_change = True
+            return True
+        else:
+            return False
+
+    def _check_highlighted_roads(self):
+        if self._need_check_highlighted_roads:
+            roads_dict = g.mSelectedRoads
+            keys = roads_dict.keys()
+            if len(keys) == 0:
+                return False
+
+            if len(keys) == 1:
+                roads = list(roads_dict.values())[0]
+                roads = roads.to_frame().T
+            else:
+                roads = [road.to_frame().T for road in list(roads_dict.values())]
+                roads = gpd.pd.concat(roads, ignore_index=False)
+
+            self.highlighted_road_gl.set_gdf(roads)
+            self.highlighted_road_gl.set_style_factory(sm.I.dis.road_highlight_style_factory)
+            self.highlighted_road_gl.update_buffer()
+
+            self._need_check_highlighted_roads = False
+            self._any_change = True
+            return True
+        else:
+            return False
+
+    def _check_nodes(self):
+        if self._need_check_nodes:
+            self.node_gl.set_gdf(Road.get_all_nodes())
+            self.node_gl.set_style_factory(sm.I.dis.node_style_factory)
+            self.node_gl.update_buffer()
+
+            self._need_check_nodes = False
+            self._any_change = True
+            return True
+        else:
+            return False
+
+    def get_road_idx_by_mouse_pos(self, mouse_pos) -> Union[int, None]:
+        return None
+
+    def clear_cache(self):
+        self.x_lim = None
+        self.y_lim = None
+        self.recheck_all()
+
+    def recheck_all(self):
+        self._need_check_roads = True
+        self._need_check_buildings = True
+        self._need_check_regions = True
+        self._need_check_nodes = True
+        self._need_check_road_idx = True
+        self._need_check_highlighted_roads = True
+
+    def clear_highlight_data(self):
+        self._need_check_highlighted_roads = True
+
+    def clear_road_data(self):
+        """适用于road的颜色、显示等发生改变时"""
+        self._need_check_roads = True
+
+    def clear_road_data_deep(self):
+        """适用于road的文件结构改变时"""
+        self._need_check_roads = True
+        self._need_check_road_idx = True
+        self._need_check_highlighted_roads = True
+
+    def clear_building_data(self):
+        self._need_check_buildings = True
+
+    def clear_region_data(self):
+        self._need_check_regions = True
+
+    def clear_x_y_lim(self):
+        self.x_lim = None
+        self.y_lim = None
+
+    @property
+    def ratio(self):
+        return self.width / self.height
+
+    def zoom_all(self):
+        print('zoom all')
+        x_lim, y_lim = self.road_gl.get_xy_lim()
+        y_center = (y_lim[0] + y_lim[1]) / 2
+        y_size = y_lim[1] - y_lim[0]
+        y_size *= 1.2
+        self.y_lim = (y_center - y_size / 2, y_center + y_size / 2)
+
+        x_center = (x_lim[0] + x_lim[1]) / 2
+        x_size = self.ratio * y_size
+        self.x_lim = (x_center - x_size / 2, x_center + x_size / 2)
+
+    def render(self, **kwargs):
+        """被调用即进行渲染，不进行逻辑判断"""
+        print('rendering')
+        self.fbo.use()
+        self.fbo.clear()
+        if self.x_lim is None:  # 只有在x_lim被清空或第一次运行时才会获取
+            self.zoom_all()
+        if self.enable_render_regions:
+            self.region_gl.update_prog(self.x_lim, self.y_lim)
+            self.region_gl.render()
+        if self.enable_render_buildings:
+            self.building_gl.update_prog(self.x_lim, self.y_lim)
+            self.building_gl.render()
+        if self.enable_render_roads:
+            self.road_gl.update_prog(self.x_lim, self.y_lim)
+            self.road_gl.render()
+        if self.enable_render_nodes:
+            self.node_gl.update_prog(self.x_lim, self.y_lim)
+            self.node_gl.render()
+
+    def update(self, **kwargs):
+        """每帧调用"""
+        if len(Road.get_all_roads()) == 0:
+            return
+        width, height = g.mImageSize
+        if width != self.width or height != self.height:
+            self.update_size(width, height)
+            self.clear_x_y_lim()
+            self._any_change = True
+
+        if self.enable_render_roads:
+            self._check_roads()
+            self._check_highlighted_roads()
+        if self.enable_render_buildings:
+            self._check_buildings()
+        if self.enable_render_regions:
+            self._check_regions()
+        if self.enable_render_nodes:
+            self._check_nodes()
+
+        if self._any_change:
+            self.render(**kwargs)
+            self._any_change = False
+
+
+class RoadIdxFrameBufferTexture(FrameBufferTexture):
+    def __init__(self, name, width, height):
+        super().__init__(name, width, height)
+
+    def check_road_idx(self):
+        pass
+
+    def render(self, **kwargs):
+        pass
+
+
 class GraphicManager:
     instance: 'GraphicManager' = None
 
     def __init__(self):
         GraphicManager.instance = self
         self.textures = {}
-        # width, height = pygame.display.get_window_size()
-        width = 1920
-        height = 1080
-        self.main_texture: MainGraphTexture = MainGraphTexture('main', width - 400, height - 200)
-
+        width, height = g.mWindowSize
+        # self.main_texture: MainGraphTexture = MainGraphTexture('main', width - 400, height - 200)
+        self.main_texture: MainFrameBufferTexture = MainFrameBufferTexture('main', width - 400, height - 200)
         self.textures['main'] = self.main_texture
 
-        self.x_lim = None
-        self.y_lim = None
-
     def add_texture(self, name, width, height):
-        texture = GraphicTexture(name, width, height)
+        texture = SimpleTexture(name, width, height)
         self.textures[texture.name] = texture
 
     def del_texture(self, name):
@@ -418,7 +772,7 @@ class GraphicManager:
         self.textures.pop(name)
         del texture
 
-    def get_or_create_texture(self, name, default_width=800, default_height=800) -> GraphicTexture:
+    def get_or_create_texture(self, name, default_width=800, default_height=800) -> SimpleTexture:
         if name not in self.textures:
             self.add_texture(name, default_width, default_height)
         return self.textures[name]
@@ -430,16 +784,15 @@ class GraphicManager:
         texture.bilt_data(data)
 
     def plot_to(self, name, gdf, **kwargs):
-        if name == 'main':
-            return
-        texture = self.get_or_create_texture(name)
-        texture.plot_gdf(gdf, **kwargs)
+        print('Simple Texture的plot to功能 目前不再受支持')
+        # if name == 'main':
+        #     return
+        # texture = self.get_or_create_texture(name)
+        # texture.plot_gdf(gdf, **kwargs)
 
     def plot_to2(self, name, plot_func, **kwargs):
-        if name == 'main':
-            return
-        texture = self.get_or_create_texture(name)
-        texture.plot(plot_func, **kwargs)
-
-    def update_main(self, **kwargs):
-        self.main_texture.update(**kwargs)
+        print('Simple Texture的plot to2功能 目前不再受支持')
+        # if name == 'main':
+        #     return
+        # texture = self.get_or_create_texture(name)
+        # texture.plot(plot_func, **kwargs)

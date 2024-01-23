@@ -32,6 +32,7 @@ from gui import imgui_tool_page
 from gui import imgui_settings_page
 
 from DDPG import env2 as env
+
 ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 
 """
@@ -91,6 +92,9 @@ def main():
     g.INIT_WINDOW_HEIGHT = screen_height if g.INIT_WINDOW_HEIGHT > screen_height else g.INIT_WINDOW_HEIGHT
     size = (g.INIT_WINDOW_WIDTH, g.INIT_WINDOW_HEIGHT)
 
+    pygame.display.gl_set_attribute(pygame.GL_DOUBLEBUFFER, 1)
+    pygame.display.gl_set_attribute(pygame.GL_DEPTH_SIZE, 24)
+    pygame.display.gl_set_attribute(pygame.GL_STENCIL_SIZE, 8)
     pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.OPENGL | pygame.RESIZABLE)
     pygame.display.set_caption('路网织补工具 V0.1')
     clock = pygame.time.Clock()
@@ -100,11 +104,11 @@ def main():
     io = imgui.get_io()
     io.display_size = size
 
-    _ = graphic_module.GraphicManager()
-
     imgui_style.init_font(impl)
     imgui_style.init_style_var()
     imgui_style.push_style(g.DARK_MODE)
+
+    _ = graphic_module.GraphicManager()
 
     lst_time = time.time()
     while True:
@@ -115,8 +119,6 @@ def main():
             impl.process_event(event)
         impl.process_inputs()
         # update graphic
-
-
 
         # draw imgui windows
         imgui.new_frame()
@@ -141,7 +143,6 @@ def main():
         gl.glClear(gl.GL_COLOR_BUFFER_BIT)
         imgui.render()
         impl.render(imgui.get_draw_data())
-
         pygame.display.flip()
         clock.tick(60)
 

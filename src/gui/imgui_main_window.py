@@ -10,7 +10,7 @@ from gui import imgui_settings_page
 
 print('main window loaded')
 def show():
-    screen_width, screen_height = pygame.display.get_window_size()
+    screen_width, screen_height = g.mWindowSize
     imgui.set_next_window_size(g.LEFT_WINDOW_WIDTH, screen_height - g.BOTTOM_WINDOW_HEIGHT)
     imgui.set_next_window_position(0, 0)
     flags = imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_COLLAPSE | imgui.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS

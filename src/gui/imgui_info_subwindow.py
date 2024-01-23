@@ -10,7 +10,7 @@ from gui import components as imgui_c
 from gui import common
 from utils import io_utils
 
-mGraphicCacheInfo = {}
+
 mGDFInfo = {}
 
 
@@ -21,7 +21,7 @@ def show():
         if g.mFirstLoop:
             window_width = 400
             windows_height = 400
-            screen_width, screen_height = pygame.display.get_window_size()
+            screen_width, screen_height = g.mWindowSize
             imgui.set_next_window_position(screen_width - window_width, 32)
             imgui.set_next_window_size(window_width, windows_height)
         expanded, g.mInfoWindowOpened = imgui.begin('信息窗口', True)
@@ -36,13 +36,6 @@ def show():
 
         imgui.text(f'selected roads {len(g.mSelectedRoads)}')
         imgui.text('')
-        imgui.text('图像缓冲区:')
-        mGraphicCacheInfo[
-            'cached highlighted img'] = GraphicManager.instance.main_texture.cached_highlighted_road_data is not None
-        mGraphicCacheInfo['cached road img'] = GraphicManager.instance.main_texture.cached_road_data is not None
-        mGraphicCacheInfo['cached road idx img'] = GraphicManager.instance.main_texture.cached_road_idx is not None
-        imgui_c.dict_viewer_component(mGraphicCacheInfo, 'graphic cache info', 'cache type', 'has data',
-                                    lambda value: str(value))
 
         imgui.text(f'inner image mpose {g.mMousePosInImage}')
         imgui.end()

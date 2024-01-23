@@ -12,7 +12,7 @@ from gui import components as imgui_c
 from gui import global_var as g
 from gui import common
 
-mDataPath = '../data/和县/data.bin'
+mDataPath = '../data/VirtualEnv/try2.bin'
 mData = None
 mDataSize = 0
 mConstEmptyData = {'version': 'N/A', 'roads': 'N/A', 'buildings': 'N/A', 'regions': 'N/A', 'height': 'N/A'}
@@ -88,7 +88,7 @@ def show():
             Spinner.spinner('data_to_region')
             if imgui.button('->All', 300 * g.GLOBAL_SCALE + 16, 32 * g.GLOBAL_SCALE):
                 Spinner.start('data_to_all', target=lambda _: (
-                    Road.data_to_roads(mData), Building.data_to_buildings(mData), Region.data_to_regions(mData)),
+                    Road.data_to_roads(mData), Building.data_to_buildings(mData), Region.data_to_regions(mData),GraphicManager.instance.main_texture.clear_cache()),
                               args=(0,))
             Spinner.spinner('data_to_all')
 
@@ -233,8 +233,6 @@ def show():
 
         expanded, visible = imgui.collapsing_header('其他', True, imgui.TREE_NODE_DEFAULT_OPEN)
         if expanded:
-            if imgui.button('update main'):
-                common.update_main_graphic()
             if imgui.button('show cached road data'):
                 GraphicManager.instance.bilt_to('cached road data',
                                                 GraphicManager.instance.main_texture.cached_road_data)

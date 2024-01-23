@@ -14,10 +14,14 @@ from utils import graphic_uitls
 
 
 def update_main_graphic():
-    # 主界面交互
     if not g.mShowingMainTextureWindow:
         return
+    # 主界面交互
+    handle_inputs()
+    GraphicManager.instance.main_texture.update()
 
+
+def handle_inputs():
     normal_mode = not g.mAddNodeMode
     # handle keyboards
     handle_common_keyboard_interation()
@@ -32,9 +36,6 @@ def update_main_graphic():
             handle_normal_mouse_interaction()
         elif g.mAddNodeMode:
             handle_add_mode_mouse_interation()
-
-    GraphicManager.instance.main_texture.update(target_size=g.mImageSize,
-                                                selected_roads=g.mSelectedRoads)
 
 
 def handle_common_keyboard_interation():
@@ -174,4 +175,3 @@ def load_selected_road_from_file(add_mode=False):
                 GraphicManager.instance.main_texture.clear_highlight_data()
         except Exception as e:
             print(str(e))
-

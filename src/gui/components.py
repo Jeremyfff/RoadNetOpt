@@ -1,5 +1,5 @@
 import imgui
-
+from gui import global_var as g
 mTmpPopupInputValue = ''
 
 
@@ -53,7 +53,7 @@ def popup_modal_input_ok_cancel_component(id, button_label, title, content, ok_c
 
 def is_hovering_window():
     _min = imgui.get_window_position()
-    _size = imgui.get_window_size()
+    _size = g.mWindowSize
     _max = (_min[0] + _size[0], _min[1] + _size[1])
     return imgui.is_mouse_hovering_rect(_min[0], _min[1], _max[0], _max[1])
 

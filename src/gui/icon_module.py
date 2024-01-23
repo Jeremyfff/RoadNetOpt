@@ -9,14 +9,14 @@ import os
 import numpy as np
 from utils import graphic_uitls
 from gui.global_var import *
-
+import gui.global_var as g
 
 class IconManager:
     icons = {}
     @staticmethod
     def _init_icons(dark_mode=True):
         sub_folder = 'light' if dark_mode else 'dark'
-        for foldername, subfolders, filenames in os.walk(rf"../textures/{sub_folder}/"):
+        for foldername, subfolders, filenames in os.walk(os.path.join(g.RESOURCE_DIR, f"textures/{sub_folder}/")):
             for filename in filenames:
                 file_path = os.path.join(foldername, filename)
                 img = Image.open(file_path)
@@ -52,7 +52,8 @@ class Spinner:
         Spinner.mDarkMode = dark_mode
 
         Spinner.mSpinImageArray = []
-        original_image = Image.open(f"../textures/{'light' if dark_mode else 'dark'}/spinner.png")
+        original_image = Image.open(os.path.join(g.RESOURCE_DIR,
+                                                 f"textures/{'light' if dark_mode else 'dark'}/spinner.png"))
         # 对图像进行旋转操作
         for i in range(Spinner.SPIN_ANI_FRAME):
             rotated_image = original_image.rotate(360 / Spinner.SPIN_ANI_FRAME * i, expand=False,

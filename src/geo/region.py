@@ -1,14 +1,16 @@
+import ctypes
 from collections import defaultdict
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import Polygon
 import shapely.plotting
 from geo import Object
+from utils.common_utils import timer
 from utils.point_utils import xywh2points
 from utils import RegionAccessibleType, RegionType, RegionCluster
 import pandas as pd
 import uuid
-
+from lib.accelerator import cAccelerator
 
 class Region(Object):
     __region_attrs = ['uid', 'geometry', 'enabled', 'accessible', 'region_type', 'quality']
@@ -249,6 +251,36 @@ class Region(Object):
                           linewidth=regions_copy['line_width'],
                           *args, **kwargs)
 
+    @staticmethod
+    @timer
+    def get_vertices_data(regions, style_factory):
+
+        params = style_factory(regions)
+        colors = params[0]
+
+        vertex_coords = []  # 所有顶点坐标
+        first = []
+        num_vertices = []
+        i = 0
+        for uid, region in regions.iterrows():
+            new_coords = list(region['geometry'].exterior.coords)
+            new_coords.pop()  # delete the last point (the same with the first point for looping)
+            num = len(new_coords)
+            first.append(len(vertex_coords))
+            num_vertices.append(num)
+            vertex_coords.extend(new_coords)
+            i += 1
+        vertex_coords = np.array(vertex_coords, dtype=np.float32).tobytes()  # 4 + 4 bytes
+        first = np.array(first, dtype=np.int32).tobytes()  # 4 byte
+        num_vertices = np.array(num_vertices, dtype=np.int32).tobytes()  # 4 bytes
+        colors = np.array(colors, dtype=np.float32)
+        if colors.shape[1] == 3:
+            colors = np.concatenate((colors, np.ones((len(colors), 1), dtype=np.float32)), axis=1)
+        colors = colors.tobytes()  # 4 + 4 + 4 + 4  bytes
+        buffer = cAccelerator.TriangulatePolygons(vertex_coords, first, num_vertices, colors)
+        py_bytes = bytes(buffer)
+        vertices = np.frombuffer(py_bytes, np.float32).reshape(-1, 6)
+        return vertices
     # endregion
 
     # region 类型转换

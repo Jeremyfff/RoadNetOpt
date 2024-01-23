@@ -1,38 +1,43 @@
+from typing import Union
+from typing import Union, TypeVar, Callable, Any
 
 import matplotlib
-
+import numpy as np
 from OpenGL.GL import *
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-
+import moderngl
 import matplotlib.pyplot as plt
-
-from geopandas import GeoDataFrame
-
-from utils.common_utils import timer
-
+from moderngl_window.opengl.vao import VAO
+from gui import global_var as g
+import geopandas as gpd
+from geo import Road, Building, Region
 import torch
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 def _plot_gdf_func(**kwargs):
     assert 'gdf' in kwargs
     assert 'ax' in kwargs
     gdf = kwargs['gdf']
     kwargs.pop('gdf')
 
-    if isinstance(gdf, GeoDataFrame):
+    if isinstance(gdf, gpd.GeoDataFrame):
         gdf.plot(**kwargs)
     elif isinstance(gdf, list):
         for df in gdf:
             df.plot(**kwargs)
 
 
-def plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False,tensor=True, **kwargs):
+def plot_as_array(gdf, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
+                  **kwargs):
     """kwargs 将会被传递给_plot_gdf_func的gdf.plot方法"""
-    return plot_as_array2(_plot_gdf_func, width, height, y_lim, x_lim, transparent, antialiased,tensor, gdf=gdf, **kwargs)
+    return plot_as_array2(_plot_gdf_func, width, height, y_lim, x_lim, transparent, antialiased, tensor, gdf=gdf,
+                          **kwargs)
 
 
-
-def plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False,tensor=True, **kwargs):
+def plot_as_array2(plot_func, width, height, y_lim=None, x_lim=None, transparent=True, antialiased=False, tensor=True,
+                   **kwargs):
     # 禁用/启用抗锯齿效果
     matplotlib.rcParams['lines.antialiased'] = antialiased
     matplotlib.rcParams['patch.antialiased'] = antialiased
@@ -130,7 +135,7 @@ def image_space_to_world_space(image_x, image_y, x_lim, y_lim, image_width, imag
     return world_x, world_y
 
 
-def create_texture_from_array(data):
+def create_texture_from_array_legacy(data):
     if isinstance(data, torch.Tensor):
         data = data.cpu().numpy()
     height, width, channels = data.shape
@@ -154,8 +159,7 @@ def create_texture_from_array(data):
     return texture_id
 
 
-
-def update_texture(texture_id, data):
+def update_texture_legacy(texture_id, data):
     if isinstance(data, torch.Tensor):
         data = data.cpu().numpy()
 
@@ -167,6 +171,25 @@ def update_texture(texture_id, data):
     elif channels == 4:
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, data)
 
+
+def create_texture_from_array(data):
+    if isinstance(data, torch.Tensor):
+        data = data.cpu().numpy()
+    height, width, channels = data.shape
+    texture = g.mCtx.texture((width, height), channels, data.tobytes())
+    g.mModernglWindowRenderer.register_texture(texture)
+    return texture.glo
+
+
+def remove_texture(texture_id):
+    assert texture_id in g.mModernglWindowRenderer._textures.keys()
+    g.mModernglWindowRenderer.remove_texture(g.mModernglWindowRenderer._textures[texture_id])
+
+
+def update_texture(texture_id, data):
+    assert texture_id in g.mModernglWindowRenderer._textures.keys()
+    texture: moderngl.Texture = g.mModernglWindowRenderer._textures[texture_id]
+    texture.write(data.tobytes())
 
 
 def blend_img_data(bot: torch.Tensor, top: torch.Tensor):
@@ -184,3 +207,73 @@ def blend_img_data(bot: torch.Tensor, top: torch.Tensor):
         blended = torch.cat((blended_rgb, blended_alpha.unsqueeze(2)), dim=2)
         blended = blended.to(torch.uint8)
         return blended
+
+
+# region opengl
+class GeoGL:
+    def __init__(self, name, style_factory, vertices_data_get_func):
+        self.ctx = g.mCtx
+        self.vao = VAO(name)
+        self.style_factory = style_factory
+        self.gdfs = None
+        self.vertices_data_get_func = vertices_data_get_func
+
+        self.buffer = None
+        self.cached_vertices = None
+
+        self.prog = g.mWindowEvent.load_program('programs/basic.glsl')
+        self.prog['m_xlim'].value = (0, 1)
+        self.prog['m_ylim'].value = (0, 1)
+
+    def get_xy_lim(self):
+        points = self.cached_vertices[:, :2]
+        min_x = np.min(points[:, 0])
+        max_x = np.max(points[:, 0])
+        min_y = np.min(points[:, 1])
+        max_y = np.max(points[:, 1])
+        return (min_x, max_x), (min_y, max_y)
+
+    def set_gdf(self, gdf):
+        self.gdfs = gdf
+
+    def set_style_factory(self, style_factory):
+        self.style_factory = style_factory
+
+    def update_buffer(self):
+        if self.gdfs is None or len(self.gdfs) == 0:
+            return
+        vertices = self.vertices_data_get_func(self.gdfs, self.style_factory)
+        if self.buffer is None or len(vertices) != len(self.cached_vertices):
+            self.buffer = self.vao.buffer(vertices, '2f 4f', ['in_vert', 'in_color'])
+        else:
+            self.buffer.write(vertices)
+        self.cached_vertices = vertices
+
+    def update_prog(self, x_lim: tuple, y_lim: tuple):
+        self.prog['m_xlim'].value = np.array(x_lim, dtype=np.float32)
+        self.prog['m_ylim'].value = np.array(y_lim, dtype=np.float32)
+
+    def render(self):
+        self.vao.render(self.prog, mode=moderngl.TRIANGLES)
+
+
+class RoadGL(GeoGL):
+    def __init__(self, name, style_factory):
+        super().__init__(name, style_factory, Road.get_vertices_data)
+
+
+class BuildingGL(GeoGL):
+    def __init__(self, name, style_factory):
+        super().__init__(name, style_factory, Building.get_vertices_data)
+
+
+class RegionGL(GeoGL):
+    def __init__(self, name, style_factory):
+        super().__init__(name, style_factory, Region.get_vertices_data)
+
+class NodeGL(GeoGL):
+    def __init__(self, name, style_factory):
+        super().__init__(name, style_factory, Road.get_node_vertices_data)
+
+
+# endregion

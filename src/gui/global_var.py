@@ -1,3 +1,8 @@
+from typing import Union
+import os
+import moderngl
+import moderngl_window.integrations.imgui
+
 GLOBAL_SCALE = 1
 DARK_MODE = True
 INIT_WINDOW_WIDTH = 1280 * GLOBAL_SCALE
@@ -10,11 +15,21 @@ DEFAULT_IMAGE_BUTTON_WIDTH = 20 * GLOBAL_SCALE
 DEFAULT_IMAGE_BUTTON_HEIGHT = 20 * GLOBAL_SCALE
 DEFAULT_ICON_WIDTH = 16 * GLOBAL_SCALE
 DEFAULT_ICON_HEIGHT = 16 * GLOBAL_SCALE
+RESOURCE_DIR = os.path.abspath('../resources/')
+LINE_WIDTH_SCALE = 2
+print(f'RESOURCE_DIR = {RESOURCE_DIR}')
+
+mModernglWindowRenderer: Union[moderngl_window.integrations.imgui.ModernglWindowRenderer, None] = None
+mCtx: Union[moderngl.Context, None] = None
+mWindowSize = (1280, 720)
+mWindowEvent: Union[moderngl_window.WindowConfig, None] = None
+
 
 mTextureScale = 1
 mChineseFont = None
 
 mFirstLoop = True
+mTime = 0
 mFrameTime = 0
 
 mDxfWindowOpened = False

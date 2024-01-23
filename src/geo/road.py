@@ -1,15 +1,22 @@
+import ctypes
 import random
+
+
+from style_module import StyleManager
+
 
 import numpy as np
 import matplotlib.pyplot as plt
 import time
 import pandas as pd
+from shapely import Polygon, delaunay_triangles
 from shapely.geometry import LineString, Point
-from shapely.ops import split
+from shapely.ops import split, triangulate
+import concurrent.futures
 
 import networkx as nx
 from geo import Object
-from utils import RoadLevel, RoadState, point_utils, road_utils, RoadCluster
+from utils import RoadLevel, RoadState, point_utils, road_utils, RoadCluster, io_utils
 
 import osmnx as ox
 import geopandas as gpd
@@ -17,7 +24,9 @@ import uuid
 import logging
 from typing import Union
 from tqdm import tqdm
-from utils.common_utils import timer, duplicate_filter, id_to_rgb
+from utils.common_utils import timer, duplicate_filter, id_to_rgb, to_triangles
+from lib.accelerator import cAccelerator
+from gui import global_var as g
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
@@ -407,7 +416,7 @@ class Road(Object):
         return pd.concat(gdfs, ignore_index=False)
 
     @staticmethod
-    def get_valid_spawn_range(road:pd.Series):
+    def get_valid_spawn_range(road: pd.Series):
         """求可以生成新路的位置，如果没有，返回None"""
         line_string: LineString = road['geometry']
         dist_threshold = road_utils.distance_threshold_by_road_level[road['level']]
@@ -416,12 +425,13 @@ class Road(Object):
         return dist_threshold, line_string.length - dist_threshold
 
     @staticmethod
-    def get_road_last_point(road:pd.Series) -> np.ndarray:
+    def get_road_last_point(road: pd.Series) -> np.ndarray:
         geo = road['geometry']
         coord = list(geo.coords[-1])
         return np.array([coord])
+
     @staticmethod
-    def get_road_last_element(road:pd.Series)->Union[LineString, Point]:
+    def get_road_last_element(road: pd.Series) -> Union[LineString, Point]:
         geo = road['geometry']
         coords = list(geo.coords)
         if len(coords) == 0:
@@ -429,8 +439,9 @@ class Road(Object):
         pt1 = coords[-1]
         pt2 = coords[-2]
         return LineString([pt1, pt2])
+
     @staticmethod
-    def cal_intersection_num(road:pd.Series, roads:gpd.GeoDataFrame) -> bool:
+    def cal_intersection_num(road: pd.Series, roads: gpd.GeoDataFrame) -> bool:
         buffered_road = road['geometry'].buffer(1e-3)
         intersects = roads['geometry'].intersects(buffered_road)
         return intersects.sum()
@@ -501,7 +512,7 @@ class Road(Object):
         cut_point = geo.interpolate(distance, normalized)
 
         _pt1 = list(cut_point.coords)[0]
-        _pt2 = list(geo.interpolate(distance+1e-5, normalized).coords)[0]
+        _pt2 = list(geo.interpolate(distance + 1e-5, normalized).coords)[0]
         _dx = _pt2[0] - _pt1[0]
         _dy = _pt2[1] - _pt1[1]
         _v = (-_dy, _dx)
@@ -532,8 +543,9 @@ class Road(Object):
             return None
         dist = random.uniform(dist_min, dist_max)
         return Road.split_road(road, dist, normalized=False)
+
     @staticmethod
-    def detect_intersection_and_split(road:pd.Series, roads:gpd.GeoDataFrame):
+    def detect_intersection_and_split(road: pd.Series, roads: gpd.GeoDataFrame):
         """road即图中a2，即在生长的路， roads即其他需要和他判断是否相交的道路"""
         # 判断交点
 
@@ -542,6 +554,7 @@ class Road(Object):
         # 根据交点分割碰撞的道路，并裁剪生长的道路
 
         # 返回？？
+
     @staticmethod
     def merge_roads(road1: pd.Series, road2: pd.Series, debug=True, update_nodes_immediately=True):
         assert isinstance(road1, pd.Series)
@@ -647,6 +660,88 @@ class Road(Object):
                         linewidth=roads_copy['line_width'],
                         *args, **kwargs)
 
+    @staticmethod
+    def get_vertices_data_legacy(roads, style_factory):
+        params = style_factory(roads)
+        colors = params[0]
+        widths = params[1]
+
+        vertex_coords = []  # 所有顶点坐标
+        vertex_colors = []  # 所有顶点颜色
+        i = 0
+        for uid, road in roads.iterrows():
+            road_poly: Polygon = road['geometry'].buffer(widths[i] * 5, quad_segs=1, cap_style='flat')
+            # quad_segs: 指定圆弧近似值中四分之一圆内的线性段数。
+            # shapely.BufferCapStyle 可在 {'round', 'square', 'flat'} 中选择, 默认 'round'
+
+            delauney = to_triangles(road_poly)
+            new_coords = np.array([list(triangle.exterior.coords) for triangle in delauney])[:, :3, :]
+            new_coords = new_coords.reshape(-1, new_coords.shape[-1])
+
+            vertex_coords.append(new_coords)
+            vertex_colors.extend([colors[i]] * len(new_coords))
+            i += 1
+        vertex_coords = np.vstack(vertex_coords)
+        vertex_colors = np.array(vertex_colors)
+        if vertex_colors.shape[1] == 3:
+            vertex_colors = np.concatenate((vertex_colors, np.ones((len(vertex_colors), 1))), axis=1)
+        vertices = np.concatenate((vertex_coords, vertex_colors), axis=1).astype(np.float32)
+        return vertices
+
+
+    @staticmethod
+    def get_vertices_data(roads, style_factory):
+        params = style_factory(roads)
+        colors = params[0]
+        widths = params[1]
+
+        vertex_coords = []  # 所有顶点坐标
+        first = []
+        num_vertices = []
+        i = 0
+        for uid, road in roads.iterrows():
+            new_coords = list(road['geometry'].coords)
+            num = len(new_coords)
+            first.append(len(vertex_coords))
+            num_vertices.append(num)
+            vertex_coords.extend(new_coords)
+            i += 1
+        vertex_coords = np.array(vertex_coords, dtype=np.float32).tobytes()  # 4 + 4 bytes
+        first = np.array(first, dtype=np.int32).tobytes()  # 4 byte
+        num_vertices = np.array(num_vertices, dtype=np.int32).tobytes()  # 4 bytes
+        colors = np.array(colors, dtype=np.float32)
+        if colors.shape[1] == 3:
+            colors = np.concatenate((colors, np.ones((len(colors), 1), dtype=np.float32)), axis=1)
+        colors = colors.tobytes()  # 4 + 4 + 4 + 4  bytes
+        widths = np.array(widths, dtype=np.float32) * g.LINE_WIDTH_SCALE  # width multiplier
+        widths = widths.tobytes()  # 4 bytes
+        print('using c# to accelerate')
+        buffer = cAccelerator.TriangulatePolylines(vertex_coords, first, num_vertices, colors, widths)
+        byte_array = (ctypes.c_ubyte * len(buffer))(*buffer)
+        py_bytes = bytes(byte_array)
+        vertices = np.frombuffer(py_bytes, np.float32).reshape(-1, 6)
+        return vertices
+
+    @staticmethod
+    def get_node_vertices_data(nodes, style_factory):
+        params = style_factory(nodes)
+        colors = params[0]
+        widths = params[1]
+        vertex_coords = []  # 所有顶点坐标
+        for uid, node in nodes.iterrows():
+            new_coords = list(node['geometry'].coords)[0]
+            vertex_coords.append(new_coords)
+        vertex_coords = np.array(vertex_coords, dtype=np.float32).tobytes()  # 4 + 4 bytes
+        colors = np.array(colors, dtype=np.float32)
+        if colors.shape[1] == 3:
+            colors = np.concatenate((colors, np.ones((len(colors), 1), dtype=np.float32)), axis=1)
+        colors = colors.tobytes()  # 4 + 4 + 4 + 4  bytes
+        widths = np.array(widths, dtype=np.float32) * g.LINE_WIDTH_SCALE  # width multiplier
+        widths = widths.tobytes()  # 4 bytes
+        buffer = cAccelerator.TriangulatePoints(vertex_coords, colors, widths)
+        py_bytes = bytes(buffer)
+        vertices = np.frombuffer(py_bytes, np.float32).reshape(-1, 6)
+        return vertices
     # endregion
 
     # region 类型转换
@@ -886,10 +981,10 @@ def example_graph_to_roads():
 
 
 if __name__ == "__main__":
-    # example_graph_to_roads()
-    for i in range(10000):
-        # 最大可编码16,777,216个数
-        b = (i % 256)
-        g = ((i // 256) % 256)
-        r = ((i // 256 // 256) % 256)
-        print(f'i = {i}, r = {r}, g = {g}, b = {b}')
+    data = io_utils.load_data("../../data/和县/simplified_data_20240102.bin")
+    Road.data_to_roads(data)
+
+    result = Road.get_road_buffer_data3(Road.get_all_roads(),
+                                        StyleManager.instance.display_style.road_level_style_factory)
+
+
