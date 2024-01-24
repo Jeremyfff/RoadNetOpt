@@ -61,6 +61,12 @@ namespace RoadNetOptAccelerator
             public Vector2[] vertices;
             public Color color;
         }
+        struct PointData
+        {
+            public Vector2 coord;
+            public Color color;
+            public float radius;
+        }
 
 
         /// <summary>
@@ -106,28 +112,25 @@ namespace RoadNetOptAccelerator
                 inWidths[i] = BitConverter.ToSingle(bWidths, 4 * i);
             }
 
-            List<byte> outDataList = new List<byte>();
+            PolylineData[] polylineDatas = new PolylineData[inNumPolylines];
+
+            
             for (int i = 0; i < inNumPolylines; i++)
             {
                 //对于每一条polyline
                 int numVertices = inNumVerticesPerPolyline[i];
-                if(numVertices > 1)
+                Vector2[] vertices = new Vector2[numVertices];
+                for (int j = 0; j < numVertices; j++)
                 {
-                    // if it is polyline
-                    Vector2[] vertices = new Vector2[numVertices];
-                    for (int j = 0; j < numVertices; j++)
-                    {
-                        vertices[j] = inVertices[j + inFirst[i]];
-                    }
-                    outDataList.AddRange(TriangulatePolyline(vertices, inWidths[i], inColors[i]));
-                    //outDataList.AddRange(TriangulatePoint(vertices[0], inWidths[i], inColors[i]));
-                    //outDataList.AddRange(TriangulatePoint(vertices[numVertices - 1], inWidths[i], inColors[i]));
+                    vertices[j] = inVertices[j + inFirst[i]];
                 }
-                else if(numVertices == 1)
-                {
-                    // if it it a point
-                    outDataList.AddRange(TriangulatePoint(inVertices[inFirst[i]], inWidths[i], inColors[i]));
-                }
+                polylineDatas[i] = new PolylineData { vertices = vertices, width = inWidths[i], color = inColors[i] };
+            }
+
+            List<byte> outDataList = new List<byte>();
+            for (int i = 0; i < inNumPolylines; i++)
+            {
+                outDataList.AddRange(TriangulatePolyline(polylineDatas[i]));
             }
             byte[] bOutData = outDataList.ToArray();
 
@@ -259,12 +262,17 @@ namespace RoadNetOptAccelerator
 
         }
 
+
         private byte[] TriangulatePolyline(Vector2[] vertices, float width, Color color)
         {
 
             int numVertices = vertices.Length;
-            Vector2[] vertices1 = OffsetLine(vertices, width);
-            Vector2[] vertices2 = OffsetLine(vertices, -width);
+            if(numVertices == 1)
+            {
+                return TriangulatePoint(vertices[0],  width / 2f, color);
+            }
+            Vector2[] vertices1 = OffsetLine(vertices, width / 2f);
+            Vector2[] vertices2 = OffsetLine(vertices, -width / 2f);
 
             int outNumVertices = (numVertices - 1) * 6;
             Vector2[] outVertices = new Vector2[outNumVertices];
@@ -290,6 +298,10 @@ namespace RoadNetOptAccelerator
             return outData;
         }
 
+        private byte[] TriangulatePolyline(PolylineData polylineData)
+        {
+            return TriangulatePolyline(polylineData.vertices, polylineData.width, polylineData.color);
+        }
         private byte[] TriangulatePoint(Vector2 coord, float radius, Color color, int division=8)
         {
             Vector2[] circleCoords = new Vector2[division];
@@ -318,6 +330,10 @@ namespace RoadNetOptAccelerator
             return outData;
         }
 
+        private byte[] TriangulatePoint(PointData pointdata)
+        {
+            return TriangulatePoint(pointdata.coord, pointdata.radius, pointdata.color);
+        }
         private byte[] TriangulatePolygon(Vector2[] vertices, Color color)
         {
             if(vertices.Length < 4)

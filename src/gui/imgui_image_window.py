@@ -23,7 +23,7 @@ def show():
     global mImageWindowSize, mImageWindowPos, \
         mImageWindowMousePos
     screen_width, screen_height = g.mWindowSize
-    flags = imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_COLLAPSE | imgui.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS
+    flags = imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_COLLAPSE | imgui.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS | imgui.WINDOW_NO_SCROLL_WITH_MOUSE
     imgui.set_next_window_size(screen_width - g.LEFT_WINDOW_WIDTH, screen_height - g.BOTTOM_WINDOW_HEIGHT)
     imgui.set_next_window_position(g.LEFT_WINDOW_WIDTH, 0)
     imgui.begin("image window", False, flags=flags)
@@ -45,7 +45,6 @@ def show():
                 continue
             selected, opened = imgui.begin_tab_item(graphic_texture.name, imgui.TAB_ITEM_TRAILING)
             if selected:
-                # IconManager.imgui_icon('fill', width=texture.width*g.mTextureScale, height=texture.height*g.mTextureScale)
                 if graphic_texture.name == 'main':
                     imgui.image(graphic_texture.texture_id,graphic_texture.width, graphic_texture.height)
                     g.mShowingMainTextureWindow = True

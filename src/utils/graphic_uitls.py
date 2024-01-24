@@ -212,6 +212,7 @@ def blend_img_data(bot: torch.Tensor, top: torch.Tensor):
 # region opengl
 class GeoGL:
     def __init__(self, name, style_factory, vertices_data_get_func):
+        self.name = name
         self.ctx = g.mCtx
         self.vao = VAO(name)
         self.style_factory = style_factory
@@ -241,12 +242,21 @@ class GeoGL:
 
     def update_buffer(self):
         if self.gdfs is None or len(self.gdfs) == 0:
+            # self.cached_vertices = None
+            # self.buffer = None
+            print(f'{self.name} gdf is none, set cached vertices and buffer to None')
             return
         vertices = self.vertices_data_get_func(self.gdfs, self.style_factory)
+        print(self.name)
+        print(vertices)
         if self.buffer is None or len(vertices) != len(self.cached_vertices):
+            print(f'{self.name} creating new buffer')
+            self.vao._buffers = []
+            self.vao.vaos = {}
             self.buffer = self.vao.buffer(vertices, '2f 4f', ['in_vert', 'in_color'])
         else:
             self.buffer.write(vertices)
+            print(f'{self.name} use old buffer')
         self.cached_vertices = vertices
 
     def update_prog(self, x_lim: tuple, y_lim: tuple):
@@ -254,6 +264,10 @@ class GeoGL:
         self.prog['m_ylim'].value = np.array(y_lim, dtype=np.float32)
 
     def render(self):
+        print(f'{self.name} rendering\n vertices is None?:{str(self.cached_vertices is None)}, gdfs is None?:{str(self.gdfs is None)}, buffer is None?:{str(self.buffer is None)}')
+        if self.cached_vertices is None or self.gdfs is None or self.buffer is None:
+            return
+
         self.vao.render(self.prog, mode=moderngl.TRIANGLES)
 
 

@@ -1,22 +1,39 @@
 import os
 import sys
-import time
+import threading
 import imgui
-import numpy as np
-from PIL import Image
-from pathlib import Path
-from imgui.integrations.pygame import PygameRenderer
-import OpenGL.GL as gl
 import ctypes
 import importlib
 import pyautogui
-from pyrr import Matrix44
-import moderngl
+from moderngl_window.context.base import BaseKeys
 import moderngl_window as mglw
-from moderngl_window import geometry
 from moderngl_window.integrations.imgui import ModernglWindowRenderer
+from PyQt5.QtWidgets import QSplashScreen, QApplication
+from PyQt5.QtGui import QPixmap
+ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 
-import geo
+"""
+* Powered by DearImGui
+* Online Manual - https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
+
+* Wrapped by PyImgui
+* https://pyimgui.readthedocs.io/en/latest/
+
+* 使用ModernGL渲染图形
+* https://github.com/moderngl/moderngl-window/
+"""
+
+
+splash = None
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    # 创建并显示开屏画面
+    splash_pix = QPixmap('splash.png')
+    splash = QSplashScreen(splash_pix)
+    splash.show()
+
+
+
 from geo import road, building, region
 import graphic_module
 
@@ -38,25 +55,14 @@ from gui import imgui_geo_page
 from gui import imgui_training_page
 from gui import imgui_tool_page
 from gui import imgui_settings_page
-
 from DDPG import env2 as env
-
-ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
-
-"""
-* Powered by DearImGui
-* Online Manual - https://pthom.github.io/imgui_manual_online/manual/imgui_manual.html
-
-* Wrapped by PyImgui
-* https://pyimgui.readthedocs.io/en/latest/
-
-* 使用ModernGL渲染图形
-* https://github.com/moderngl/moderngl-window/
-"""
 
 
 def imgui_debug_window():
     _, opened = imgui.begin('调试窗口', False)
+    imgui.text('src')
+    if imgui.button('reload graphic module'):
+        importlib.reload(graphic_module)
     imgui.text('package gui')
     if imgui.button('reload all gui'):
         importlib.reload(imgui_home_page)
@@ -100,6 +106,12 @@ class WindowEvents(mglw.WindowConfig):
     title = "路网织补工具 V0.2 (Powered by ModernGL)"
     aspect_ratio = None
     resource_dir = os.path.abspath(g.RESOURCE_DIR)
+    vsync = True
+    screen_width, screen_height = pyautogui.size()
+    g.INIT_WINDOW_WIDTH = screen_width if g.INIT_WINDOW_WIDTH > screen_width else g.INIT_WINDOW_WIDTH
+    g.INIT_WINDOW_HEIGHT = screen_height if g.INIT_WINDOW_HEIGHT > screen_height else g.INIT_WINDOW_HEIGHT
+    window_size = (g.INIT_WINDOW_WIDTH, g.INIT_WINDOW_HEIGHT)
+    keys = BaseKeys
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -107,13 +119,11 @@ class WindowEvents(mglw.WindowConfig):
         # self.wnd.ctx.error
         self.imgui = ModernglWindowRenderer(self.wnd)
 
-        screen_width, screen_height = self.wnd.size
-        g.INIT_WINDOW_WIDTH = screen_width if g.INIT_WINDOW_WIDTH > screen_width else g.INIT_WINDOW_WIDTH
-        g.INIT_WINDOW_HEIGHT = screen_height if g.INIT_WINDOW_HEIGHT > screen_height else g.INIT_WINDOW_HEIGHT
-        size = (g.INIT_WINDOW_WIDTH, g.INIT_WINDOW_HEIGHT)
+        self._exit_key = self.keys.ESCAPE
+        self._fs_key = self.keys.F11
 
-        io = imgui.get_io()
-        io.display_size = size
+        # io = imgui.get_io()
+        # io.display_size = size
 
         g.mWindowEvent = self
         g.mModernglWindowRenderer = self.imgui
@@ -129,9 +139,7 @@ class WindowEvents(mglw.WindowConfig):
     def render(self, _time: float, _frametime: float):
         g.mFrameTime = _frametime
         g.mTime = _time
-
         common.update_main_graphic()
-
         # Render UI to screen
         self.wnd.use()
         self.render_ui()
@@ -162,6 +170,7 @@ class WindowEvents(mglw.WindowConfig):
 
     def key_event(self, key, action, modifiers):
         self.imgui.key_event(key, action, modifiers)
+        common.handle_key_event(key, action, modifiers)
 
     def mouse_position_event(self, x, y, dx, dy):
         self.imgui.mouse_position_event(x, y, dx, dy)
@@ -181,6 +190,9 @@ class WindowEvents(mglw.WindowConfig):
     def unicode_char_entered(self, char):
         self.imgui.unicode_char_entered(char)
 
-
 if __name__ == '__main__':
+
+    print(f'load complete')
+    # 关闭开屏画面
+    splash.finish(None)
     mglw.run_window_config(WindowEvents)

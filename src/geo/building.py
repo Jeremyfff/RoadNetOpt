@@ -249,12 +249,10 @@ class Building(Object):
 
     @staticmethod
     @timer
-    def get_vertices_data(buildings, style_factory):
+    def get_vertices_data(buildings, style_factory, debug=False):
         start_time = time.time()
         params = style_factory(buildings)
         colors = params[0]
-        print(f'style factory消耗时间 = {time.time() - start_time}s')
-        start_time = time.time()
         num_buildings = len(buildings)
         first = np.empty(num_buildings, dtype=np.int32)
         num_vertices = np.empty(num_buildings, dtype=np.int32)
@@ -267,8 +265,6 @@ class Building(Object):
             num_vertices[i] = num
             total += num
             i += 1
-        print(f'提取坐标消耗时间 = {time.time() - start_time}s')
-        start_time = time.time()
         vertex_coords = np.concatenate(vertex_coords.values, axis=0)
         vertex_coords = np.array(vertex_coords, dtype=np.float32).tobytes()  # 4 + 4 bytes
         first = np.array(first, dtype=np.int32).tobytes()  # 4 byte
@@ -277,19 +273,17 @@ class Building(Object):
         if colors.shape[1] == 3:
             colors = np.concatenate((colors, np.ones((len(colors), 1), dtype=np.float32)), axis=1)
         colors = colors.tobytes()  # 4 + 4 + 4 + 4  bytes
-        print(f'prepare bytes 消耗时间 = {time.time() - start_time}s')
-        start_time = time.time()
+        if debug:
+            print(f'prepare bytes 消耗时间 = {time.time() - start_time}s')
+            start_time = time.time()
         buffer = cAccelerator.TriangulatePolygons(vertex_coords, first, num_vertices, colors)
-        print(f'c# 代码消耗时间 = {time.time() - start_time}s')
-        start_time = time.time()
-        # byte_array = (ctypes.c_ubyte * len(buffer))(*buffer)
-        # print(f'提取 byte_array消耗时间 = {time.time() - start_time}s')
-        # start_time = time.time()
+        if debug:
+            print(f'c# 代码消耗时间 = {time.time() - start_time}s')
+            start_time = time.time()
         py_bytes = bytes(buffer)
-        print(f'转换为pybytes消耗时间 = {time.time() - start_time}s')
-        start_time = time.time()
         vertices = np.frombuffer(py_bytes, np.float32).reshape(-1, 6)
-        print(f'转换为numpy消耗时间 = {time.time() - start_time}s')
+        if debug:
+            print(f'转换为numpy消耗时间 = {time.time() - start_time}s')
         return vertices
 
     # endregion

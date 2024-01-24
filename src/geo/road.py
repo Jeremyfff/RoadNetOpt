@@ -1,10 +1,5 @@
 import ctypes
 import random
-
-
-from style_module import StyleManager
-
-
 import numpy as np
 import matplotlib.pyplot as plt
 import time
@@ -12,17 +7,13 @@ import pandas as pd
 from shapely import Polygon, delaunay_triangles
 from shapely.geometry import LineString, Point
 from shapely.ops import split, triangulate
-import concurrent.futures
-
 import networkx as nx
 from geo import Object
-from utils import RoadLevel, RoadState, point_utils, road_utils, RoadCluster, io_utils
-
-import osmnx as ox
+from utils import RoadLevel, RoadState, point_utils, road_utils, RoadCluster
 import geopandas as gpd
 import uuid
 import logging
-from typing import Union
+from typing import Union, Optional
 from tqdm import tqdm
 from utils.common_utils import timer, duplicate_filter, id_to_rgb, to_triangles
 from lib.accelerator import cAccelerator
@@ -34,9 +25,10 @@ logger = logging.getLogger()
 
 class Road(Object):
     """部分功能还没有经过实验"""
-    __node_attrs = ['uid', 'x', 'y', 'geometry', 'cache']
-    __edge_attrs = ['u', 'v', 'uid', 'geometry', 'level', 'state', 'cache', 'geohash']
-
+    __node_attrs = ['uid', 'geometry', 'coord', 'cache']
+    #  UUID.uuid4 | shapely.Geometry | tuple | bool
+    __edge_attrs = ['u', 'v', 'uid', 'geometry', 'coords', 'level', 'state', 'cache', 'geohash']
+    # UUID.uuid4 | UUID.uuid4 | UUID.uuid4 | shapely.Geometry | np.ndarray | RoadLevel | RoadState | bool | int
     __node_gdf = gpd.GeoDataFrame(columns=__node_attrs)
     __node_gdf.set_index('uid')
 
@@ -58,35 +50,38 @@ class Road(Object):
 
     # region 节点相关
     @staticmethod
-    def _add_node(uid, x, y, geometry):
+    def _add_node(uid, coord: tuple):
         """
         创建单个node并添加到Road.__node_gdf中
-        通过该方法添加的node，会同步更新Road.__coord_to_node_uid
+        该方法不会检测是否存在重复坐标，请结合__coord_to_node_uid判断后添加
         请勿自行对Road.__node_gdf进行增删或修改
         """
-        new_row = {'geometry': [geometry],
-                   'x': [x],
-                   'y': [y],
-                   'uid': [uid]
+
+        new_row = {'geometry': [Point(coord)],
+                   'coord': [coord],
+                   'uid': [uid],
+                   'cache': [False]
                    }
         new_gdf = gpd.GeoDataFrame(new_row, index=new_row['uid'])
         if not Road.__node_gdf.empty:
             Road.__node_gdf = gpd.pd.concat([Road.__node_gdf, new_gdf], ignore_index=False)
         else:
             Road.__node_gdf = new_gdf
-        Road.__coord_to_node_uid[(x, y)] = uid
+        Road.__coord_to_node_uid[coord] = uid
         Road.__uid = uuid.uuid4()
 
     @staticmethod
-    def _add_nodes(uid_list, x_list, y_list, geometry_list):
+    def _add_nodes(uid_list, coords_list: list[tuple]):
         """
         一次性添加多个node到 Road.__node_gdf中
         该方法避免了多次创建df的过程，速度更快，因此在添加多个目标时应该首选该方法
         通过该方法添加的node 会同步更新Road.__coord_to_node_uid
         """
+        geometry_list = [Point(coord) for coord in coords_list]
+        cache_list = [False for _ in coords_list]
         new_row = {'geometry': geometry_list,
-                   'x': x_list,
-                   'y': y_list,
+                   'coord': coords_list,
+                   'cache': cache_list,
                    'uid': uid_list
                    }
         new_gdf = gpd.GeoDataFrame(new_row, index=new_row['uid'])
@@ -96,7 +91,7 @@ class Road(Object):
             Road.__node_gdf = new_gdf
         # update
         for i in range(len(uid_list)):
-            Road.__coord_to_node_uid[(x_list[i], y_list[i])] = uid_list[i]
+            Road.__coord_to_node_uid[coords_list[i]] = uid_list[i]
         Road.__uid = uuid.uuid4()
 
     @staticmethod
@@ -110,16 +105,14 @@ class Road(Object):
         因此对于node的任何更新，必须同步到Road.__coord_to_node_uid中，
         否则将引起错误）
         """
-        assert isinstance(coord, tuple)
+        if not isinstance(coord, tuple):
+            coord = tuple(coord)
         if coord in Road.__coord_to_node_uid:
             return Road.__coord_to_node_uid[coord]
         else:
             # create a new node
-            point = Point(coord)
             uid = uuid.uuid4()
-            x = coord[0]
-            y = coord[1]
-            Road._add_node(uid, x, y, point)
+            Road._add_node(uid, coord)
             return uid
 
     @staticmethod
@@ -128,10 +121,9 @@ class Road(Object):
         直接删除node ，不考虑引用关系
         """
         node = Road.__node_gdf.loc[uid]
-        x = node['x']
-        y = node['y']
+        coord = node['coord']
         Road.__node_gdf.drop(uid, inplace=True)
-        Road.__coord_to_node_uid.pop((x, y))  # 同时删除coord_to_node_uid中缓存的坐标
+        Road.__coord_to_node_uid.pop(coord)  # 同时删除coord_to_node_uid中缓存的坐标
         Road.__uid = uuid.uuid4()
 
     @staticmethod
@@ -141,6 +133,18 @@ class Road(Object):
         """
         if not Road._any_road_using_node(uid):
             Road._delete_node(uid)
+
+    @staticmethod
+    def _clear_unused_nodes():
+        """清除所有没有被使用的node"""
+        valid_nodes = Road._get_nodes_by_roads(Road.get_all_roads())
+        Road.__node_gdf = valid_nodes
+        Road.rebuild_coord_to_uid_dict()
+
+    @staticmethod
+    def rebuild_coord_to_uid_dict():
+        """重建Road.__coord_to_node_uid"""
+        Road.__coord_to_node_uid = {row['coord']: uid for uid, row in Road.__node_gdf.iterrows()}
 
     @staticmethod
     def get_all_nodes():
@@ -164,71 +168,66 @@ class Road(Object):
     def _create_road_by_coords(coords: np.ndarray,
                                level: RoadLevel,
                                state: RoadState) -> pd.Series:
-        """从坐标创建road，但不添加到__Road.__edge_gdf中"""
+        """
+        从坐标创建road。
+        仅创建，不添加到Road.__edge_gdf中。
+        注意，虽然创建的road没有加到Road的edge gdf中，但这里的节点将直接加到Road的node gdf中
+        """
+        assert len(coords.shape) == 2, '提供的coords数组维度必须为2，例如(n, 2)， 其中n表示点的个数'
         geometry = point_utils.points_to_geo(coords)
-        return Road._create_road_by_geometry(geometry, level, state)
-
-    @staticmethod
-    def _create_road_by_geometry(geometry: Union[LineString, Point],
-                                 level: RoadLevel,
-                                 state: RoadState) -> pd.Series:
-        """从geometry创建road， 但不添加到__Road.__edge_gdf中"""
-        # 注意，虽然创建的road没有加到Road的edge gdf中，但这里的节点将直接加到Road的node gdf中
         u = Road._get_coord_uid(geometry.coords[0])
         v = Road._get_coord_uid(geometry.coords[-1])
         uid = uuid.uuid4()
         new_row = {'u': [u],
                    'v': [v],
                    'geometry': [geometry],
+                   'coords': [coords],
                    'level': [level],
                    'state': [state],
                    'uid': [uid],
                    'cache': False,
-                   'geohash': hash(tuple(geometry.coords))
+                   'geohash': hash(coords.tobytes())
                    }
         return gpd.GeoDataFrame(new_row, index=new_row['uid']).iloc[0]
 
     @staticmethod
-    def create_roads_by_coords(points_list: list[np.ndarray],
+    def create_roads_by_coords(coords_list: list[np.ndarray],
                                levels_list: list[RoadLevel],
                                states_list: list[RoadState]) -> gpd.GeoDataFrame:
-        geometry_list = [point_utils.points_to_geo(points) for points in points_list]
-        return Road.create_roads_by_geometries(geometry_list, levels_list, states_list)
-
-    @staticmethod
-    def create_roads_by_geometries(geometry_list: list[LineString, Point],
-                                   levels_list: list[RoadLevel],
-                                   states_list: list[RoadState]) -> gpd.GeoDataFrame:
-        assert len(geometry_list) == len(levels_list) == len(states_list)
-        u_list = [Road._get_coord_uid(geom.coords[0]) for geom in geometry_list]
-        v_list = [Road._get_coord_uid(geom.coords[-1]) for geom in geometry_list]
-        uid_list = [uuid.uuid4() for _ in geometry_list]
-        geohash_list = [hash(tuple(geometry.coords)) for geometry in geometry_list]
+        assert len(coords_list) == len(levels_list) == len(states_list)
+        geometry_list = [point_utils.points_to_geo(coords) for coords in coords_list]
+        u_list = [Road._get_coord_uid(coords[0]) for coords in coords_list]
+        v_list = [Road._get_coord_uid(coords[-1]) for coords in coords_list]
+        uid_list = [uuid.uuid4() for _ in coords_list]
+        cache_list = [False for _ in coords_list]
+        geohash_list = [hash(coords.tobytes()) for coords in coords_list]
         new_data = {'u': u_list,
                     'v': v_list,
                     'geometry': geometry_list,
+                    'coords': coords_list,
                     'level': levels_list,
                     'state': states_list,
                     'uid': uid_list,
+                    'cache': cache_list,
                     'geohash': geohash_list
                     }
         return gpd.GeoDataFrame(new_data, index=new_data['uid'])
 
     @staticmethod
-    def add_road(road: pd.Series) -> uuid.UUID:
+    def add_road(road: pd.Series, return_uid: bool = True) -> Optional[uuid.UUID]:
         """添加road至Road.__edge_gdf"""
         assert isinstance(road, pd.Series)
         road_df = road.to_frame().T
         if not Road.__edge_gdf.empty:
-
             Road.__edge_gdf = gpd.pd.concat([Road.__edge_gdf, road_df], ignore_index=False)
         else:
             Road.__edge_gdf = road_df
         Road.__uid = uuid.uuid4()
-        return road['uid']
+        if return_uid:
+            return road['uid']
 
     @staticmethod
-    def add_roads(roads: gpd.GeoDataFrame) -> list[uuid.UUID]:
+    def add_roads(roads: gpd.GeoDataFrame, return_uid: bool = False) -> Optional[list[uuid.UUID]]:
         """添加roads至Road.__edge_gdf"""
         assert isinstance(roads, gpd.GeoDataFrame)
         if not Road.__edge_gdf.empty:
@@ -236,39 +235,26 @@ class Road(Object):
         else:
             Road.__edge_gdf = roads
         Road.__uid = uuid.uuid4()
-        return list(roads['uid'])
+        if return_uid:
+            return list(roads['uid'])
 
     @staticmethod
     def add_road_by_coords(coords: np.ndarray,
                            level: RoadLevel,
-                           state: RoadState) -> uuid.UUID:
+                           state: RoadState,
+                           return_uid=True) -> Optional[uuid.UUID]:
         """通过坐标创建road并添加至Road.__edge_gdf"""
         road = Road._create_road_by_coords(coords, level, state)
-        return Road.add_road(road)
+        return Road.add_road(road, return_uid)
 
     @staticmethod
-    def _add_road_by_geometry(geometry: Union[LineString, Point],
-                              level: RoadLevel,
-                              state: RoadState) -> uuid.UUID:
-        """通过geometry创建road并添加至Road.__edge_gdf"""
-        road = Road._create_road_by_geometry(geometry, level, state)
-        return Road.add_road(road)
-
-    @staticmethod
-    def add_roads_by_coords(points_list: list[np.ndarray],
+    def add_roads_by_coords(coords_list: list[np.ndarray],
                             levels_list: list[RoadLevel],
-                            states_list: list[RoadState]) -> list[uuid.UUID]:
+                            states_list: list[RoadState],
+                            return_uid=False) -> Optional[list[uuid.UUID]]:
         """通过坐标创建roads并添加至Road.__edge_gdf"""
-        roads = Road.create_roads_by_coords(points_list, levels_list, states_list)
-        return Road.add_roads(roads)
-
-    @staticmethod
-    def _add_roads_by_geometries(geometry_list: list[LineString, Point],
-                                 levels_list: list[RoadLevel],
-                                 states_list: list[RoadState]) -> list[uuid.UUID]:
-        """通过geometries创建road并添加至Road.__edge_gdf"""
-        roads = Road.create_roads_by_geometries(geometry_list, levels_list, states_list)
-        return Road.add_roads(roads)
+        roads = Road.create_roads_by_coords(coords_list, levels_list, states_list)
+        return Road.add_roads(roads, return_uid)
 
     @staticmethod
     def delete_road(road: pd.Series, update_nodes_immediately=True):
@@ -287,12 +273,10 @@ class Road(Object):
         Road.__uid = uuid.uuid4()
 
         # handle cache
-        try:
-            if road['cache']:
-                # 如果road是cached过的， 那么任何更改都会导致cache失效
-                Road._flag_cached_graph_need_update = True
-        except Exception as e:
-            pass
+        if road['cache']:
+            # 如果road是cached过的， 那么任何更改都会导致cache失效
+            Road._flag_cached_graph_need_update = True
+
             # delete unused nodes
         if update_nodes_immediately:
             Road._clear_node(u)
@@ -317,15 +301,6 @@ class Road(Object):
 
     # region 获取查找
     @staticmethod
-    def get_nodes_by_roads(roads: gpd.GeoDataFrame):
-        node_uids = set()
-        for uid, road in roads.iterrows():
-            node_uids.add(road['u'])
-            node_uids.add(road['v'])
-        filtered_gdf = Road.__edge_gdf[Road.__edge_gdf.index.isin(node_uids)]
-        return filtered_gdf
-
-    @staticmethod
     def get_edge_attrs():
         return Road.__edge_attrs
 
@@ -344,6 +319,7 @@ class Road(Object):
         assert isinstance(idx, int)
         road = Road.__edge_gdf.iloc[idx]
         return road
+
 
     @staticmethod
     def get_roads_by_attr_and_value(attr: str, value: any) -> gpd.GeoDataFrame:
@@ -497,7 +473,8 @@ class Road(Object):
         return Road.get_road_by_uid(uid)
 
     @staticmethod
-    def split_road(road: pd.Series, distance: float, normalized: bool, update_nodes_immediately=True):
+    def split_road(road: pd.Series, distance: float, normalized: bool, update_nodes_immediately=True) -> Optional[
+        np.ndarray]:
         assert isinstance(road, pd.Series)
         uid = road['uid']
         geo = road['geometry']
@@ -508,9 +485,14 @@ class Road(Object):
             logging.warning(f"Road geometry does not contain any LineString. "
                             f"This road ({uid}) will be skipped")
             return
-
-        cut_point = geo.interpolate(distance, normalized)
-
+        # Negative length values are taken as measured in the reverse direction from the end of the geometry.
+        # Out-of-range index values are handled by clamping them to the valid range of values.
+        # If the normalized arg is True, the distance will be interpreted as a fraction of the geometry's length.
+        cut_point: Point = geo.interpolate(distance, normalized)
+        if cut_point.is_empty:
+            logging.warning(f"Cut failed. Cut_point is empty. Please check your road geometry."
+                            f"This road ({uid}) will be skipped")
+            return
         _pt1 = list(cut_point.coords)[0]
         _pt2 = list(geo.interpolate(distance + 1e-5, normalized).coords)[0]
         _dx = _pt2[0] - _pt1[0]
@@ -521,19 +503,20 @@ class Road(Object):
         cut_line = LineString([_v_pt1, _v_pt2])
         new_geos = list(split(geo, cut_line).geoms)
         if len(new_geos) == 1:
-            logging.warning('split failed')
-            return np.array(list(cut_point.coords))
-        assert len(new_geos) == 2
-        Road._add_road_by_geometry(new_geos[0], level=level, state=state)
-        Road._add_road_by_geometry(new_geos[1], level=level, state=state)
+            logging.warning('Failed to split the road into two parts')
+            return np.array(cut_point.coords)
+        if not len(new_geos) == 2:
+            logging.warning(f'The road been split into {len(new_geos)} parts.'
+                            f'This is not allowed.')
+            return
+        for new_geo in new_geos:
+            new_coords = np.array(new_geo.coords)  # (n, 2)
+            Road.add_road_by_coords(new_coords, level=level, state=state)
         Road.delete_road(road, update_nodes_immediately)  # org nodes will be handled here
         # handle cache
-        try:
-            if road['cache']:
-                Road._flag_cached_graph_need_update = True
-        except Exception as e:
-            pass
-        return np.array(list(cut_point.coords))
+        if road['cache']:
+            Road._flag_cached_graph_need_update = True
+        return np.array(cut_point.coords)
 
     @staticmethod
     def split_road_by_random_position(road: pd.Series):
@@ -567,48 +550,54 @@ class Road(Object):
             if debug:
                 logging.warning('不同state的道路无法合并')
             return
-        if isinstance(road1['geometry'], Point) or isinstance(road2['geometry'], Point):
+        coords1 = road1['coords']
+        coords2 = road2['coords']
+        if len(coords1) <= 1 or len(coords2) <= 1:
             if debug:
-                logging.warning('geometry为point的道路暂不支持合并')
+                logging.warning('只有一个点的道路暂不支持合并')
             return
         node_uids = {road1['u'], road1['v'], road2['u'], road2['v']}
-
         if len(node_uids) >= 4:
             if debug:
-                logging.warning('道路不相邻， 无法合并')
+                logging.warning('没有找到共享的node， 无法合并')
             return
-        geo1 = road1['geometry']
-        geo2 = road2['geometry']
-        common_point = geo1.intersection(geo2)
-        if not isinstance(common_point, Point):
+        if len(node_uids) <= 2:
             if debug:
-                logging.error('未知错误导致找不到common point， 跳过')
-            return
-        coords1 = list(geo1.coords)
-        coords2 = list(geo2.coords)
-
-        if common_point.coords[0] == geo1.coords[0]:
-            coords1.reverse()
-        if common_point.coords[0] == geo2.coords[-1]:
-            coords2.reverse()
-        new_coords = coords1[:-1] + coords2
-
-        new_geo = LineString(new_coords)
-        Road._add_road_by_geometry(new_geo, road1['level'], road1['state'])
+                logging.warning('道路完全重合')
+            Road.delete_road(road2, update_nodes_immediately=update_nodes_immediately)
+            return road1
+        if road1['u'] == road2['u']:
+            # (<v---coords1---u) (u---coords2---v>)
+            coords1 = coords1[::-1, :]  # 翻转
+        elif road1['u'] == road2['v']:
+            # (<v---coords1---u) (<v---coords2---u)
+            coords1 = coords1[::-1, :]  # 翻转
+            coords2 = coords2[::-1, :]  # 翻转
+        elif road1['v'] == road2['u']:
+            # (u---coords1---v>) (u---coords2---v>)
+            pass
+        elif road1['v'] == road2['v']:
+            # (u---coords1---v>) (<v---coords2---u)
+            coords2 = coords2[::-1, :]  # 翻转
+        else:
+            raise Exception
+        new_coords = np.vstack((coords1[:-1, :], coords2))
+        Road.add_road_by_coords(new_coords, road1['level'], road1['state'])
         Road.delete_road(road1, update_nodes_immediately=update_nodes_immediately)
         Road.delete_road(road2, update_nodes_immediately=update_nodes_immediately)
 
     @staticmethod
     @timer
     def simplify_roads():
-        org_nodes = [node for uid, node in Road.__node_gdf.iterrows()]
-        org_node_count = len(org_nodes)
+        org_nodes = [node for uid, node in Road.__node_gdf.iterrows()]  # 这里必须创建一份副本，否则对node 的删改会改变列表
+        org_node_count = len(Road.__node_gdf)
         print(f'原始节点数: {org_node_count}')
         for node in org_nodes:
             roads = Road.get_roads_by_node(node)
             if len(roads) == 2:
-                Road.merge_roads(roads.iloc[0], roads.iloc[1])
+                Road.merge_roads(roads.iloc[0], roads.iloc[1], update_nodes_immediately=False)
         after_node_count = len(Road.__node_gdf)
+        Road._clear_unused_nodes()  # coord to uid 的dict也会被更新
         print(f'优化后节点数: {after_node_count}')
         print(f'{org_node_count - after_node_count}节点被优化')
 
@@ -688,24 +677,25 @@ class Road(Object):
         vertices = np.concatenate((vertex_coords, vertex_colors), axis=1).astype(np.float32)
         return vertices
 
-
     @staticmethod
-    def get_vertices_data(roads, style_factory):
+    def get_vertices_data(roads, style_factory, debug=False):
+        start_time = time.time()
         params = style_factory(roads)
         colors = params[0]
         widths = params[1]
-
-        vertex_coords = []  # 所有顶点坐标
-        first = []
-        num_vertices = []
+        num_roads = len(roads)
+        first = np.empty(num_roads, dtype=np.int32)
+        num_vertices = np.empty(num_roads, dtype=np.int32)
+        vertex_coords = roads['coords']
         i = 0
-        for uid, road in roads.iterrows():
-            new_coords = list(road['geometry'].coords)
-            num = len(new_coords)
-            first.append(len(vertex_coords))
-            num_vertices.append(num)
-            vertex_coords.extend(new_coords)
+        total = 0
+        for coords in vertex_coords:
+            num = len(coords)
+            first[i] = total
+            num_vertices[i] = num
+            total += num
             i += 1
+        vertex_coords = np.concatenate(vertex_coords.values, axis=0)
         vertex_coords = np.array(vertex_coords, dtype=np.float32).tobytes()  # 4 + 4 bytes
         first = np.array(first, dtype=np.int32).tobytes()  # 4 byte
         num_vertices = np.array(num_vertices, dtype=np.int32).tobytes()  # 4 bytes
@@ -715,11 +705,17 @@ class Road(Object):
         colors = colors.tobytes()  # 4 + 4 + 4 + 4  bytes
         widths = np.array(widths, dtype=np.float32) * g.LINE_WIDTH_SCALE  # width multiplier
         widths = widths.tobytes()  # 4 bytes
-        print('using c# to accelerate')
+        if debug:
+            print(f'prepare bytes 消耗时间 = {time.time() - start_time}s')
+            start_time = time.time()
         buffer = cAccelerator.TriangulatePolylines(vertex_coords, first, num_vertices, colors, widths)
-        byte_array = (ctypes.c_ubyte * len(buffer))(*buffer)
-        py_bytes = bytes(byte_array)
+        if debug:
+            print(f'c# 代码消耗时间 = {time.time() - start_time}s')
+            start_time = time.time()
+        py_bytes = bytes(buffer)
         vertices = np.frombuffer(py_bytes, np.float32).reshape(-1, 6)
+        if debug:
+            print(f'转换为numpy消耗时间 = {time.time() - start_time}s')
         return vertices
 
     @staticmethod
@@ -727,11 +723,9 @@ class Road(Object):
         params = style_factory(nodes)
         colors = params[0]
         widths = params[1]
-        vertex_coords = []  # 所有顶点坐标
-        for uid, node in nodes.iterrows():
-            new_coords = list(node['geometry'].coords)[0]
-            vertex_coords.append(new_coords)
-        vertex_coords = np.array(vertex_coords, dtype=np.float32).tobytes()  # 4 + 4 bytes
+        vertex_coords = np.array(nodes['coord'].values, dtype=np.float32)
+        print(vertex_coords.shape)
+        vertex_coords = vertex_coords.tobytes()  # 4 + 4 bytes
         colors = np.array(colors, dtype=np.float32)
         if colors.shape[1] == 3:
             colors = np.concatenate((colors, np.ones((len(colors), 1), dtype=np.float32)), axis=1)
@@ -742,6 +736,7 @@ class Road(Object):
         py_bytes = bytes(buffer)
         vertices = np.frombuffer(py_bytes, np.float32).reshape(-1, 6)
         return vertices
+
     # endregion
 
     # region 类型转换
@@ -771,12 +766,10 @@ class Road(Object):
             node_df = node_df[~node_df['cache']]  # filter non-cached nodes
         else:
             G = nx.Graph()
-
         # add nodes first
         for index, row in node_df.iterrows():
             uid = row['uid']
-            x = row['x']
-            y = row['y']
+            x, y = row['coord']
             geometry = row['geometry']
             G.add_node(uid,
                        x=x,
@@ -788,11 +781,13 @@ class Road(Object):
             v = row['v']
             uid = row['uid']
             geometry = row['geometry']
+            coords = row['coords']
             state = row['state']
             level = row['level']
             G.add_edge(u, v,
                        uid=uid,
                        geometry=geometry,
+                       coords=coords,
                        level=level,
                        state=state)
         end_time = time.time()
@@ -809,13 +804,14 @@ class Road(Object):
         该方法速度较慢
         """
         Road.delete_all()
+        coords_list = []
         level_list = []
         state_list = []
-        geometry_list = []
         for u, v, data in G.edges.data():
-            if 'geometry' not in data:
-                logging.info('no geometry in data')
+            if 'coords' not in data:
+                logging.warning('No coords in data!')
                 continue
+
             if 'level' in data:
                 level = data['level']
             elif 'highway' in data:
@@ -823,13 +819,15 @@ class Road(Object):
             else:
                 level = RoadLevel.UNDEFINED
             level_list.append(level)
+
             if 'state' in data:
                 state = data['state']
             else:
                 state = RoadState.RAW
+
             state_list.append(state)
-            geometry_list.append(data['geometry'])
-        Road._add_roads_by_geometries(geometry_list, level_list, state_list)
+            coords_list.append(data['coords'])
+        Road.add_roads_by_coords(coords_list, level_list, state_list)
 
     @staticmethod
     @timer
@@ -932,59 +930,8 @@ class Road(Object):
             logging.warning("no cache to restore")
         Road.__uid = uuid.uuid4()
 
-    @staticmethod
-    def rebuild_coord_to_uid_dict():
-        """重建Road.__coord_to_node_uid"""
-        Road.__coord_to_node_uid = {(row['x'], row['y']): uid for uid, row in Road.__node_gdf.iterrows()}
-
     # endregion
 
 
-def example_roads_to_graph():
-    # existed_roads = Road.quick_roads()
-    G = Road.to_graph()
-
-    pos = {node: (data['x'], data['y']) for node, data in G.nodes(data=True)}
-    edge_width = {}
-    # 遍历图中的每条边，根据 RoadLevel 属性来设置边的粗细
-    for u, v, data in G.edges(data=True):
-        road_level = data['level']
-        if road_level == RoadLevel.TRUNK:
-            edge_width[(u, v)] = 5
-        elif road_level == RoadLevel.SECONDARY:
-            edge_width[(u, v)] = 3
-        else:
-            edge_width[(u, v)] = 1
-
-    # 绘制图
-    nx.draw(G, pos, with_labels=False, node_color='lightblue', node_size=100,
-            edge_color='gray', width=[edge_width[e] for e in G.edges()])
-
-    # 显示图
-    plt.axis('equal')
-    plt.axis('off')
-    plt.grid(False)
-    plt.tight_layout()
-    plt.show()
-
-
-def example_graph_to_roads():
-    G = ox.graph_from_bbox(37.79, 37.78, -122.41, -122.43, network_type='drive')
-    Road.from_graph(G)
-    Road.plot_all()
-
-    plt.axis('equal')
-    plt.axis('off')
-    plt.grid(False)
-    plt.tight_layout()
-    plt.show()
-
-
 if __name__ == "__main__":
-    data = io_utils.load_data("../../data/和县/simplified_data_20240102.bin")
-    Road.data_to_roads(data)
-
-    result = Road.get_road_buffer_data3(Road.get_all_roads(),
-                                        StyleManager.instance.display_style.road_level_style_factory)
-
-
+    pass

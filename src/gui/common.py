@@ -1,5 +1,6 @@
 import os
 import pickle
+import sys
 
 import imgui
 import numpy as np
@@ -11,67 +12,89 @@ from utils import io_utils
 from gui import global_var as g
 from gui import components as imgui_c
 from utils import graphic_uitls
+from moderngl_window.context.base import KeyModifiers, BaseKeys
 
 
 def update_main_graphic():
-    if not g.mShowingMainTextureWindow:
-        return
-    # 主界面交互
-    handle_inputs()
+    if not g.mShowingMainTextureWindow: return
+    handle_mouse_event()
+    # key event will be handled in the gui loop
     GraphicManager.instance.main_texture.update()
 
 
-def handle_inputs():
-    normal_mode = not g.mAddNodeMode
-    # handle keyboards
-    handle_common_keyboard_interation()
-    if normal_mode:
-        handle_normal_keyboard_interation()
-    elif g.mAddNodeMode:
-        handle_add_mode_keyboard_interation()
-
+def handle_mouse_event():
+    _handle_global_common_mouse_interaction()
+    if not g.mShowingMainTextureWindow: return
     # handle mouse
-    if is_hovering_image_window():
-        if normal_mode:
-            handle_normal_mouse_interaction()
-        elif g.mAddNodeMode:
-            handle_add_mode_mouse_interation()
+    _handle_main_texture_common_mouse_interaction()
+    if not _is_hovering_image_window(): return
+    normal_mode = not g.mAddNodeMode
+    # 以下为鼠标在图像窗口上的互动
+    if normal_mode:
+        _handle_main_texture_normal_mode_mouse_interaction()
+    elif g.mAddNodeMode:
+        _handle_main_texture_add_mode_mouse_interation()
 
 
-def handle_common_keyboard_interation():
-    if imgui.is_key_pressed(imgui.KEY_ESCAPE):
-        clear_selected_roads_and_update_graphic()
-    if imgui.is_key_pressed(imgui.KEY_BACKSPACE):
-        GraphicManager.instance.main_texture.clear_cache()
-    if imgui.is_key_pressed(imgui.KEY_DELETE):
-        for road in g.mSelectedRoads.values():
-            Road.delete_road_by_uid(road['uid'])
-        clear_selected_roads_and_update_graphic()
+def handle_key_event(key, action, modifiers):
+    _handle_global_common_keyboard_interation(key, action, modifiers)
+    if not g.mShowingMainTextureWindow: return
+    normal_mode = not g.mAddNodeMode
+    _handle_main_texture_common_keyboard_interation(key, action, modifiers)
+    if normal_mode:
+        _handle_main_texture_normal_mode_keyboard_interation(key, action, modifiers)
+    elif g.mAddNodeMode:
+        _handle_main_texutre_add_mode_keyboard_interation(key, action, modifiers)
 
 
-def handle_normal_keyboard_interation():
+def _handle_global_common_mouse_interaction():
+    """全局通用鼠标动作"""
     pass
 
 
-def handle_add_mode_keyboard_interation():
-    if imgui.is_key_pressed(imgui.KEY_ENTER):
-        g.mAddNodeMode = False
+mLastTextureSpaceDeltaX = 0
+mLastTextureSpaceDeltaY = 0
+mIsMouseDragging = False
 
 
-def handle_normal_mouse_interaction():
-    if imgui.is_mouse_clicked(0):  # left
-        if imgui.get_io().key_shift:
-            select_or_deselect_road_by_current_mouse_pos()
-        elif imgui.get_io().key_ctrl:
-            select_road_by_current_mouse_pos(add_mode=True)
-        else:
-            select_road_by_current_mouse_pos(add_mode=False)
-
+def _handle_main_texture_common_mouse_interaction():
+    """main texture窗口显示时的鼠标交互， 鼠标可在窗口外面"""
+    global mLastTextureSpaceDeltaX, mLastTextureSpaceDeltaY, mIsMouseDragging
     if imgui.is_mouse_dragging(2):
-        print('dragging')
+        if not mIsMouseDragging:
+            imgui.reset_mouse_drag_delta(2)
+            mIsMouseDragging = True
+            return
+        screen_space_mouse_delta = imgui.get_mouse_drag_delta(2)
+        texture_space_delta_x = screen_space_mouse_delta[0] / float(g.mTextureScale)
+        texture_space_delta_y = screen_space_mouse_delta[1] / float(g.mTextureScale)
+        GraphicManager.instance.main_texture.pan(((texture_space_delta_x - mLastTextureSpaceDeltaX),
+                                                  (texture_space_delta_y - mLastTextureSpaceDeltaY)))
+        mLastTextureSpaceDeltaX = texture_space_delta_x
+        mLastTextureSpaceDeltaY = texture_space_delta_y
+    if imgui.is_mouse_released(2):
+        mIsMouseDragging = False
+        mLastTextureSpaceDeltaX = 0
+        mLastTextureSpaceDeltaY = 0
+        imgui.reset_mouse_drag_delta(2)
+    mouse_scroll_y = imgui.get_io().mouse_wheel
+    if mouse_scroll_y != 0:
+        GraphicManager.instance.main_texture.zoom(g.mMousePosInImage, 1.0 - mouse_scroll_y * 0.1)
 
 
-def handle_add_mode_mouse_interation():
+def _handle_main_texture_normal_mode_mouse_interaction():
+    """main texture窗口显示，普通模式， 并且鼠标在窗口内部的交互"""
+    if imgui.is_mouse_clicked(0):  # left
+        if g.mShift:
+            _select_or_deselect_road_by_current_mouse_pos()
+        elif g.mCtrl:
+            _select_road_by_current_mouse_pos(add_mode=True)
+        else:
+            _select_road_by_current_mouse_pos(add_mode=False)
+
+
+def _handle_main_texture_add_mode_mouse_interation():
+    """main texture窗口显示，手动添加道路模式，并且鼠标在窗口内部的交互"""
     if g.mCurrentEditingRoad is None:
         return
     if imgui.is_mouse_clicked(0):
@@ -85,29 +108,78 @@ def handle_add_mode_mouse_interation():
         g.mCurrentEditingRoad = Road.add_point_to_road(g.mCurrentEditingRoad, read_point_np)
 
 
-def is_hovering_image_window():
+def _handle_global_common_keyboard_interation(key, action, modifiers):
+    """全局有效的键盘事件"""
+    keys = g.mWindowEvent.wnd.keys
+    if action == keys.ACTION_PRESS:
+        if modifiers.ctrl:
+            g.mCtrl = True
+        if modifiers.shift:
+            g.mShift = True
+        if modifiers.alt:
+            g.mAlt = True
+        if modifiers.ctrl and key == keys.Q:
+            g.mWindowEvent.wnd.close()
+    elif action == keys.ACTION_RELEASE:
+        g.mCtrl = False
+        g.mShift = False
+        g.mAlt = False
+
+def _handle_main_texture_common_keyboard_interation(key, action, modifiers):
+    """main texture 显示时通用的键盘事件"""
+    keys = g.mWindowEvent.wnd.keys
+    if action == keys.ACTION_PRESS:
+        if key == keys.ESCAPE:
+            _clear_selected_roads_and_update_graphic()
+        elif key == keys.DELETE:
+            for road in g.mSelectedRoads.values():
+                Road.delete_road_by_uid(road['uid'])
+            _clear_selected_roads_and_update_graphic()
+        elif modifiers.ctrl and key == keys.R:
+            GraphicManager.instance.main_texture.clear_cache()
+        elif modifiers.ctrl and key == keys.A:
+            for uid, road in Road.get_roads_by_cluster(GraphicManager.instance.main_texture.road_cluster).iterrows():
+                g.mSelectedRoads[uid] = road
+            GraphicManager.instance.main_texture.clear_highlight_data()
+    elif action == keys.ACTION_RELEASE:
+        pass
+
+
+def _handle_main_texture_normal_mode_keyboard_interation(key, action, modifiers):
+    """main texture显示时， 普通模式的键盘事件"""
+    pass
+
+
+def _handle_main_texutre_add_mode_keyboard_interation(key, action, modifiers):
+    """main texture显示时， 手动添加路网模式的键盘事件"""
+    if imgui.is_key_pressed(imgui.KEY_ENTER):
+        g.mAddNodeMode = False
+
+
+def _is_hovering_image_window():
     return g.mHoveringImageWindow and \
         not g.mHoveringMainTextureSubWindow and \
         not g.mHoveringInfoSubWindow and \
         not g.mHoveringDxfSubWindow
 
 
-def get_road_by_current_mouse_pos():
+def _get_road_by_current_mouse_pos():
     idx = GraphicManager.instance.main_texture.get_road_idx_by_mouse_pos(g.mMousePosInImage)
     if idx is None:
         return None
     try:
         road = Road.get_road_by_index(idx)
+        print(road['uid'])
         return road
     except Exception as e:
         return None
 
 
-def select_road_by_current_mouse_pos(add_mode=False):
-    road = get_road_by_current_mouse_pos()
+def _select_road_by_current_mouse_pos(add_mode=False):
+    road = _get_road_by_current_mouse_pos()
     if road is None:
         if not add_mode:
-            clear_selected_roads_and_update_graphic()
+            _clear_selected_roads_and_update_graphic()
         return
     uid = road['uid']
     if not add_mode:
@@ -116,8 +188,8 @@ def select_road_by_current_mouse_pos(add_mode=False):
     GraphicManager.instance.main_texture.clear_highlight_data()
 
 
-def select_or_deselect_road_by_current_mouse_pos():
-    road = get_road_by_current_mouse_pos()
+def _select_or_deselect_road_by_current_mouse_pos():
+    road = _get_road_by_current_mouse_pos()
     if road is None:
         return
     uid = road['uid']
@@ -128,8 +200,8 @@ def select_or_deselect_road_by_current_mouse_pos():
     GraphicManager.instance.main_texture.clear_highlight_data()
 
 
-def deselect_road_by_current_mouse_pos():
-    road = get_road_by_current_mouse_pos()
+def _deselect_road_by_current_mouse_pos():
+    road = _get_road_by_current_mouse_pos()
     if road is None:
         return
     uid = road['uid']
@@ -137,7 +209,7 @@ def deselect_road_by_current_mouse_pos():
     GraphicManager.instance.main_texture.clear_highlight_data()
 
 
-def clear_selected_roads_and_update_graphic():
+def _clear_selected_roads_and_update_graphic():
     if len(g.mSelectedRoads) > 0:
         GraphicManager.instance.main_texture.clear_highlight_data()
         g.mSelectedRoads = {}

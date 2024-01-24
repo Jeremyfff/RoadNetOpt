@@ -85,7 +85,7 @@ def imgui_select_editor_content():
     imgui_c.tooltip('取消Pin' if mPinSelectEditor else 'Pin')
     imgui.text(f'selected roads {len(g.mSelectedRoads)}')
     if imgui.button('取消所有选择'):
-        common.clear_selected_roads_and_update_graphic()
+        common._clear_selected_roads_and_update_graphic()
     if imgui.button('save selected roads'):
         common.save_selected_roads()
     imgui.same_line()

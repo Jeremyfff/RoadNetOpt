@@ -136,20 +136,20 @@ class StyleScheme:
 
     def road_idx_style_factory(self, roads):
         _ = self
-        if roads is None:
-            return
+        if roads is None: return
         num = len(roads)
-        arr_int32 = np.arange(num).astype(np.int32).reshape(num, 1)
-        arr_uint8 = arr_int32.view(np.uint8).reshape(arr_int32.shape[0], 4)
-        arr_float32 = arr_uint8.astype(np.float32)
-        colors = arr_float32
+        assert num < 16_777_216 / 3, '达到uint24 能表达的道路数量上限'
+        idx_uint32 = np.arange(num, dtype=np.uint32).reshape(num, 1) * 3
+        rgb_uint8 = idx_uint32.view(np.uint8).reshape(num, 4)[:, :3]
+        rgb_float32 = rgb_uint8.astype(np.float32) / 256.0
+        alpha_float32 = np.ones((num, 1), dtype=np.float32)
+        colors = np.concatenate((rgb_float32, alpha_float32), axis=1)
         width = np.full(num, 5).astype(np.float32)
         return colors, width
 
     def road_highlight_style_factory(self, roads):
         _ = self
-        if roads is None:
-            return
+        if roads is None: return
         num = len(roads)
         width = np.full(num, 5)
         colors = np.full((num, 4), [0, 1, 0, 1])
@@ -157,8 +157,7 @@ class StyleScheme:
 
     def node_style_factory(self, nodes):
         _ = self
-        if nodes is None:
-            return
+        if nodes is None: return
         num = len(nodes)
         width = np.full(num, 10)
         colors = np.full((num, 4), [0.5, 0.5, 1, 1])
@@ -188,13 +187,11 @@ class StyleScheme:
         edge_color = colors
         return colors, face_color, edge_color
 
-
     def region_type_style_factory(self, regions):
         colors = np.array(regions['region_type'].map(self.REGION_COLOR_BY_TYPE).values.tolist())
         face_color = colors
         edge_color = colors
         return colors, face_color, edge_color
-
 
     def get_road_style_factory_by_name(self, name: str):
         return self.road_style_factory_dict[name]

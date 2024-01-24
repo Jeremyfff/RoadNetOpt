@@ -24,8 +24,7 @@ mCtx: Union[moderngl.Context, None] = None
 mWindowSize = (1280, 720)
 mWindowEvent: Union[moderngl_window.WindowConfig, None] = None
 
-
-mTextureScale = 1
+mTextureScale: float = 1.0
 mChineseFont = None
 
 mFirstLoop = True
@@ -50,3 +49,7 @@ mImageWindowInnerPos = (0, 0)  # 图片控件在窗口的绝对位置（屏幕�
 mSelectedRoads = {}  # 被选中的道路 dict{uid:road}
 mCurrentEditingRoad = None
 mAddNodeMode = False
+
+mShift = False
+mCtrl = False
+mAlt = False

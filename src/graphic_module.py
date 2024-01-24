@@ -448,9 +448,9 @@ class MainFrameBufferTexture(FrameBufferTexture):
         super().__init__(name, width, height)
 
         # clusters
-        self._road_cluster = RoadCluster()
-        self._building_cluster = BuildingCluster()
-        self._region_cluster = RegionCluster()
+        self.road_cluster = RoadCluster()
+        self.building_cluster = BuildingCluster()
+        self.region_cluster = RegionCluster()
 
         # lims
         self.x_lim = None
@@ -489,6 +489,8 @@ class MainFrameBufferTexture(FrameBufferTexture):
         self.node_gl = graphic_uitls.NodeGL('node', _nsf)
         self.highlighted_road_gl = graphic_uitls.RoadGL('highlighted_road', _hsf)
 
+        self._road_idx_texture = RoadIdxFrameBufferTexture('road_idx', self.width, self.height)
+
     def show_imgui_display_editor(self):
         road_changed = False
         building_changed = False
@@ -508,7 +510,7 @@ class MainFrameBufferTexture(FrameBufferTexture):
             imgui.end_popup()
         if self.enable_render_roads:
             imgui.indent()
-            road_changed |= self._road_cluster.show_imgui_cluster_editor_button()
+            road_changed |= self.road_cluster.show_imgui_cluster_editor_button()
             imgui.unindent()
         # buildings
         IconManager.imgui_icon('building-fill')
@@ -518,7 +520,7 @@ class MainFrameBufferTexture(FrameBufferTexture):
             self._any_change = True
         if self.enable_render_buildings:
             imgui.indent()
-            building_changed |= self._building_cluster.show_imgui_cluster_editor_button()
+            building_changed |= self.building_cluster.show_imgui_cluster_editor_button()
             imgui.unindent()
         # regions
         IconManager.imgui_icon('polygon')
@@ -528,7 +530,7 @@ class MainFrameBufferTexture(FrameBufferTexture):
             self._any_change = True
         if self.enable_render_regions:
             imgui.indent()
-            region_changed |= self._region_cluster.show_imgui_cluster_editor_button()
+            region_changed |= self.region_cluster.show_imgui_cluster_editor_button()
             imgui.unindent()
 
         # nodes
@@ -545,9 +547,6 @@ class MainFrameBufferTexture(FrameBufferTexture):
         if region_changed:
             self.clear_region_data()
 
-    def _in_regions(self, pos):
-        return 0 <= pos[0] < self.width and 0 <= pos[1] < self.height
-
     def _check_roads(self):
         """
         检查roads是否需要更新，两种情况会导致其进行更新操作：
@@ -559,7 +558,7 @@ class MainFrameBufferTexture(FrameBufferTexture):
         """
         if self._need_check_roads or self.cached_road_uid != Road.uid():
 
-            self.road_gl.set_gdf(Road.get_roads_by_cluster(self._road_cluster))
+            self.road_gl.set_gdf(Road.get_roads_by_cluster(self.road_cluster))
             self.road_gl.set_style_factory(sm.I.dis.get_current_road_style_factory())
             self.road_gl.update_buffer()
 
@@ -578,7 +577,7 @@ class MainFrameBufferTexture(FrameBufferTexture):
 
     def _check_buildings(self):
         if self._need_check_buildings or self.cached_building_uid != Building.uid():
-            self.building_gl.set_gdf(Building.get_buildings_by_cluster(self._building_cluster))
+            self.building_gl.set_gdf(Building.get_buildings_by_cluster(self.building_cluster))
             self.building_gl.set_style_factory(sm.I.dis.get_current_building_style_factory())
             self.building_gl.update_buffer()
 
@@ -591,7 +590,7 @@ class MainFrameBufferTexture(FrameBufferTexture):
 
     def _check_regions(self):
         if self._need_check_regions or self.cached_region_uid != Region.uid():
-            self.region_gl.set_gdf(Region.get_regions_by_cluster(self._region_cluster))
+            self.region_gl.set_gdf(Region.get_regions_by_cluster(self.region_cluster))
             self.region_gl.set_style_factory(sm.I.dis.get_current_region_style_factory())
             self.region_gl.update_buffer()
 
@@ -607,9 +606,8 @@ class MainFrameBufferTexture(FrameBufferTexture):
             roads_dict = g.mSelectedRoads
             keys = roads_dict.keys()
             if len(keys) == 0:
-                return False
-
-            if len(keys) == 1:
+                roads = None
+            elif len(keys) == 1:
                 roads = list(roads_dict.values())[0]
                 roads = roads.to_frame().T
             else:
@@ -617,12 +615,20 @@ class MainFrameBufferTexture(FrameBufferTexture):
                 roads = gpd.pd.concat(roads, ignore_index=False)
 
             self.highlighted_road_gl.set_gdf(roads)
-            self.highlighted_road_gl.set_style_factory(sm.I.dis.road_highlight_style_factory)
             self.highlighted_road_gl.update_buffer()
 
             self._need_check_highlighted_roads = False
             self._any_change = True
             return True
+        else:
+            return False
+
+    def _check_road_idx(self):
+        if self._need_check_road_idx:
+            self._road_idx_texture.road_idx_gl.set_gdf(Road.get_roads_by_cluster(self.road_cluster))
+            self._road_idx_texture.road_idx_gl.update_buffer()
+            self._need_check_road_idx = False
+            self._any_change = True
         else:
             return False
 
@@ -638,8 +644,27 @@ class MainFrameBufferTexture(FrameBufferTexture):
         else:
             return False
 
+    def _in_regions(self, pos):
+        return 0 <= pos[0] < self.width and 0 <= pos[1] < self.height
+
     def get_road_idx_by_mouse_pos(self, mouse_pos) -> Union[int, None]:
-        return None
+        if not self._in_regions(mouse_pos): return None
+        if self.x_lim is None or self.y_lim is None: return None
+        self._road_idx_texture.fbo.use()
+        self._road_idx_texture.fbo.clear(1, 1, 1, 0)
+        self._road_idx_texture.road_idx_gl.update_prog(self.x_lim, self.y_lim)
+        self._road_idx_texture.road_idx_gl.render()
+        texture = self._road_idx_texture.texture
+        img_uint8 = np.frombuffer(self._road_idx_texture.fbo.color_attachments[0].read(), dtype=np.uint8).reshape(
+            (texture.height, texture.width, 4))
+        color_uint8 = img_uint8[mouse_pos[1], mouse_pos[0], :]
+        if color_uint8[3] == 0: return None  # click on blank
+        color_uint8 = color_uint8.copy()
+        color_uint8[3] = 0.0  # set the alpha channel to 0
+        idx_uint32 = color_uint8.view(np.uint32)  # turn the data format into uint32
+        idx = int((idx_uint32 / 3)[0])
+        print(f'idx = {idx}')
+        return idx
 
     def clear_cache(self):
         self.x_lim = None
@@ -686,16 +711,49 @@ class MainFrameBufferTexture(FrameBufferTexture):
         x_lim, y_lim = self.road_gl.get_xy_lim()
         y_center = (y_lim[0] + y_lim[1]) / 2
         y_size = y_lim[1] - y_lim[0]
-        y_size *= 1.2
+        y_size *= 1.05
         self.y_lim = (y_center - y_size / 2, y_center + y_size / 2)
-
         x_center = (x_lim[0] + x_lim[1]) / 2
         x_size = self.ratio * y_size
         self.x_lim = (x_center - x_size / 2, x_center + x_size / 2)
+        self._any_change = True
+
+    def pan(self, texture_space_delta: tuple):
+        if self.x_lim is None or self.y_lim is None:
+            return
+        x_ratio = (self.x_lim[1] - self.x_lim[0]) / self.width
+        y_ratio = (self.y_lim[1] - self.y_lim[0]) / self.height
+        x_delta = texture_space_delta[0] * -x_ratio
+        y_delta = texture_space_delta[1] * y_ratio
+        self.x_lim = (self.x_lim[0] + x_delta, self.x_lim[1] + x_delta)
+        self.y_lim = (self.y_lim[0] + y_delta, self.y_lim[1] + y_delta)
+        self._any_change = True
+
+    def zoom(self, texture_space_center, percent):
+        if self.x_lim is None or self.y_lim is None:
+            return
+        if percent == 0:
+            return
+
+        ts_cx = texture_space_center[0]
+        ts_cy = self.height - texture_space_center[1]
+        ws_cx = (self.x_lim[1] - self.x_lim[0]) * ts_cx / self.width + self.x_lim[0]
+        ws_cy = (self.y_lim[1] - self.y_lim[0]) * ts_cy / self.height + self.y_lim[0]
+
+        nx = self.x_lim[0] - ws_cx
+        px = self.x_lim[1] - ws_cx
+        ny = self.y_lim[0] - ws_cy
+        py = self.y_lim[1] - ws_cy
+        nx *= percent
+        px *= percent
+        ny *= percent
+        py *= percent
+        self.x_lim = (ws_cx + nx, ws_cx + px)
+        self.y_lim = (ws_cy + ny, ws_cy + py)
+        self._any_change = True
 
     def render(self, **kwargs):
         """被调用即进行渲染，不进行逻辑判断"""
-        print('rendering')
         self.fbo.use()
         self.fbo.clear()
         if self.x_lim is None:  # 只有在x_lim被清空或第一次运行时才会获取
@@ -709,6 +767,8 @@ class MainFrameBufferTexture(FrameBufferTexture):
         if self.enable_render_roads:
             self.road_gl.update_prog(self.x_lim, self.y_lim)
             self.road_gl.render()
+            self.highlighted_road_gl.update_prog(self.x_lim, self.y_lim)
+            self.highlighted_road_gl.render()
         if self.enable_render_nodes:
             self.node_gl.update_prog(self.x_lim, self.y_lim)
             self.node_gl.render()
@@ -720,12 +780,14 @@ class MainFrameBufferTexture(FrameBufferTexture):
         width, height = g.mImageSize
         if width != self.width or height != self.height:
             self.update_size(width, height)
+            self._road_idx_texture.update_size(width, height)
             self.clear_x_y_lim()
             self._any_change = True
 
         if self.enable_render_roads:
             self._check_roads()
             self._check_highlighted_roads()
+            self._check_road_idx()
         if self.enable_render_buildings:
             self._check_buildings()
         if self.enable_render_regions:
@@ -741,12 +803,7 @@ class MainFrameBufferTexture(FrameBufferTexture):
 class RoadIdxFrameBufferTexture(FrameBufferTexture):
     def __init__(self, name, width, height):
         super().__init__(name, width, height)
-
-    def check_road_idx(self):
-        pass
-
-    def render(self, **kwargs):
-        pass
+        self.road_idx_gl = graphic_uitls.RoadGL('raod_idx', sm.I.dis.road_idx_style_factory)
 
 
 class GraphicManager:
@@ -780,7 +837,7 @@ class GraphicManager:
     def bilt_to(self, name, data):
         if name == 'main':
             return
-        texture = self.get_or_create_texture(name, data.shape[0], data.shape[1])
+        texture = self.get_or_create_texture(name, data.shape[1], data.shape[0])
         texture.bilt_data(data)
 
     def plot_to(self, name, gdf, **kwargs):

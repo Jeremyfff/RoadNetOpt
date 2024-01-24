@@ -38,6 +38,10 @@ def show():
         imgui.text('')
 
         imgui.text(f'inner image mpose {g.mMousePosInImage}')
+
+        imgui.text(f'Ctrl: {g.mCtrl}')
+        imgui.text(f'Shift: {g.mShift}')
+        imgui.text(f'Alt: {g.mAlt}')
         imgui.end()
 
 
