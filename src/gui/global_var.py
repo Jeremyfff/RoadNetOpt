@@ -3,7 +3,7 @@ import os
 import moderngl
 import moderngl_window.integrations.imgui
 
-GLOBAL_SCALE = 1.5
+GLOBAL_SCALE = 1.0
 DARK_MODE = True
 INIT_WINDOW_WIDTH = 1280 * GLOBAL_SCALE
 INIT_WINDOW_HEIGHT = 720 * GLOBAL_SCALE

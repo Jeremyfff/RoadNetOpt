@@ -887,6 +887,53 @@ class RoadIdxFrameBufferTexture(FrameBufferTexture):
         self.road_idx_gl = graphic_uitls.RoadGL('raod_idx', sm.I.dis.road_idx_style_factory)
 
 
+class AgentFrameBufferTexture(FrameBufferTexture):
+    def __init__(self, name, width, height):
+        super().__init__(name, width, height)
+        self.exposed = False
+
+        _rsf = sm.I.env.road_level_style_factory
+        _bsf = sm.I.env.building_movable_style_factory
+        _resf = sm.I.env.region_accessible_style_factory
+
+        self.road_gl = graphic_uitls.RoadGL('road', _rsf)
+        self.building_gl = graphic_uitls.BuildingGL('building', _bsf)
+        self.region_gl = graphic_uitls.RegionGL('region', _resf)
+
+        self.x_lim = None
+        self.y_lim = None
+
+        self.cached_road_uid = None
+
+    def set_observation_space(self, center, size):
+        self.x_lim = (center[0] - size, center[0] + size)
+        self.y_lim = (center[1] - size, center[1] + size)
+
+    def update_roads_buffer(self):
+        self.road_gl.set_gdf(Road.get_all_roads())
+        self.road_gl.update_buffer()
+        self.cached_road_uid = Road.uid()
+
+    def render(self):
+        if self.x_lim is None or self.y_lim is None:
+            return
+        if self.cached_road_uid != Road.uid():
+            self.update_roads_buffer()
+        self.fbo.use()
+        self.fbo.clear()
+        self.region_gl.update_prog(self.x_lim, self.y_lim)
+        self.region_gl.render()
+        self.building_gl.update_prog(self.x_lim, self.y_lim)
+        self.building_gl.render()
+        self.road_gl.update_prog(self.x_lim, self.y_lim)
+        self.road_gl.render()
+
+    def get_last_render_img(self):
+        img_uint8 = np.frombuffer(self.texture.read(), dtype=np.uint8).reshape(
+            (self.texture.height, self.texture.width, 4))
+        return img_uint8
+
+
 class GraphicManager:
     instance: 'GraphicManager' = None
 

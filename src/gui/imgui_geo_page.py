@@ -1,4 +1,5 @@
 import os.path
+import traceback
 
 import imgui
 import osmnx as ox
@@ -123,40 +124,25 @@ def show():
                     mRoadGDFCluster.show_imgui_cluster_editor_button()
                     imgui.text('详细操作')
                     if imgui.tree_node('创建删除'):
-                        imgui.button('add road')
-                        imgui.button('delete road')
                         imgui.tree_pop()
                     if imgui.tree_node('获取查找'):
-                        imgui.button('get road by uid')
-                        imgui.button('get road by index')
-                        imgui.button('get roads by attr and value')
-                        imgui.button('get nodes by attr and value')
-                        imgui.button('get first road')
-                        imgui.button('get last road')
-                        imgui.button('get all roads')
-                        imgui.button('get roads by node')
                         imgui.tree_pop()
                     if imgui.tree_node('编辑修改'):
                         imgui.button('add point to road')
                         imgui.button('add points to road')
                         imgui.button('split road')
                         imgui.button('merge road')
-                        imgui.button('simplify roads')
-
+                        if imgui.button('simplify roads'):
+                            try:
+                                Road.simplify_roads()
+                            except:
+                                traceback.print_stack()
                         imgui.tree_pop()
                     if imgui.tree_node('绘图相关'):
-                        imgui.button('plot roads')
-                        imgui.button('plot all')
                         imgui.tree_pop()
                     if imgui.tree_node('类型转换'):
-                        imgui.button('to graph')
-                        imgui.button('from graph')
-                        imgui.button('to data')
-                        imgui.button('from data')
                         imgui.tree_pop()
                     if imgui.tree_node('其他工具'):
-                        imgui.button('quick roads')
-                        imgui.button('show info')
                         imgui.tree_pop()
                     imgui.end_tab_item()
 
@@ -201,47 +187,6 @@ def show():
         imgui.tree_pop()
 
     if imgui.tree_node('绘图工具', imgui.TREE_NODE_DEFAULT_OPEN):
-        expanded, visible = imgui.collapsing_header('常规绘图', True, imgui.TREE_NODE_DEFAULT_OPEN)
-        if expanded:
-            imgui.text('plotting')
-            if imgui.button('plot all roads'):
-                GraphicManager.instance.plot_to('roads', Road.get_all_roads())
-            imgui.same_line()
-            if imgui.button('plot all buildings'):
-                GraphicManager.instance.plot_to('buildings', Building.get_all_buildings())
-            imgui.same_line()
-            if imgui.button('plot all regions'):
-                GraphicManager.instance.plot_to('regions', Region.get_all_regions())
-
-            if imgui.button('plot all gdf'):
-                GraphicManager.instance.plot_to('all',
-                                                [Road.get_all_roads(), Building.get_all_buildings(),
-                                                 Region.get_all_regions()])
-
-            if imgui.button('plot by idx'):
-                GraphicManager.instance.plot_to2('roads', Road.plot_using_idx, roads=Road.get_all_roads())
-        expanded, visible = imgui.collapsing_header('使用cluster绘图', True, imgui.TREE_NODE_DEFAULT_OPEN)
-        if expanded:
-            if imgui.button('plot roads by cluster'):
-                GraphicManager.instance.plot_to('roads', Road.get_roads_by_cluster(mRoadGDFCluster))
-
-            if imgui.button('plot buildings by cluster'):
-                GraphicManager.instance.plot_to('buildings', Building.get_buildings_by_cluster(mBuildingGDFCluster))
-
-            if imgui.button('plot regions by cluster'):
-                GraphicManager.instance.plot_to('regions', Region.get_regions_by_cluster(mRegionGDFCluster))
-
-        expanded, visible = imgui.collapsing_header('其他', True, imgui.TREE_NODE_DEFAULT_OPEN)
-        if expanded:
-            if imgui.button('show cached road data'):
-                GraphicManager.instance.bilt_to('cached road data',
-                                                GraphicManager.instance.main_texture.cached_road_data)
-            if imgui.button('show cached road idx data'):
-                GraphicManager.instance.bilt_to('cached road idx data',
-                                                GraphicManager.instance.main_texture.cached_road_idx)
-            if imgui.button('show cached highlighted road data'):
-                GraphicManager.instance.bilt_to('cached highlighted road data',
-                                                GraphicManager.instance.main_texture.cached_highlighted_road_data)
         imgui.tree_pop()
     imgui.pop_id()
 
