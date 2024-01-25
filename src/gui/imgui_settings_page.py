@@ -36,4 +36,4 @@ def show():
 
     if imgui.button('exit', width=200 * g.GLOBAL_SCALE, height=24 * g.GLOBAL_SCALE):
         sys.exit(0)
-    _, g.mTextureScale = imgui.slider_float('target texture scale', g.mTextureScale, 0.5, 10)
+

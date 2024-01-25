@@ -1,15 +1,10 @@
 import os
 import sys
-import threading
-import imgui
-import ctypes
-import importlib
-import pyautogui
-from moderngl_window.context.base import BaseKeys
-import moderngl_window as mglw
-from moderngl_window.integrations.imgui import ModernglWindowRenderer
 from PyQt5.QtWidgets import QSplashScreen, QApplication
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QFont, QPainter, QColor
+from PyQt5.QtCore import Qt
+import ctypes
+
 ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 
 """
@@ -23,26 +18,39 @@ ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 * https://github.com/moderngl/moderngl-window/
 """
 
-
-splash = None
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    # 创建并显示开屏画面
-    splash_pix = QPixmap('splash.png')
-    splash = QSplashScreen(splash_pix)
-    splash.show()
+app = QApplication(sys.argv)
+# 创建并显示开屏画面
+splash_pix = QPixmap('splash.png')
+splash = QSplashScreen(splash_pix)
+splash.show()
 
 
+def show_msg(content):
+    splash.showMessage(f"            Version 0.2 | 2024.01.25\n            Loading {content}... \n\n", Qt.AlignBottom, Qt.gray)  # 显示加载进度文本
+    app.processEvents()  # 处理程序事件
 
+show_msg('py packages')
+import importlib
+import pyautogui
+import imgui
+
+show_msg('Moderngl Window')
+from moderngl_window.context.base import BaseKeys
+import moderngl_window as mglw
+from moderngl_window.integrations.imgui import ModernglWindowRenderer
+show_msg('Pytorch')
+import torch
+show_msg('Geo Module')
 from geo import road, building, region
+show_msg('Graphic Module')
 import graphic_module
-
+show_msg('Icon Module')
 from gui import icon_module
+show_msg('Gui Module')
 from gui import common
 from gui import global_var as g
 from gui import imgui_style
 from gui import components as imgui_c
-
 from gui import imgui_bottom_window
 from gui import imgui_dxf_subwindow
 from gui import imgui_image_window
@@ -55,6 +63,7 @@ from gui import imgui_geo_page
 from gui import imgui_training_page
 from gui import imgui_tool_page
 from gui import imgui_settings_page
+show_msg('DDPG')
 from DDPG import env2 as env
 
 
@@ -116,10 +125,10 @@ class WindowEvents(mglw.WindowConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         imgui.create_context()
-        # self.wnd.ctx.error
+        _ = self.wnd.ctx.error
         self.imgui = ModernglWindowRenderer(self.wnd)
 
-        self._exit_key = self.keys.ESCAPE
+        self._exit_key = None
         self._fs_key = self.keys.F11
 
         # io = imgui.get_io()
@@ -190,9 +199,8 @@ class WindowEvents(mglw.WindowConfig):
     def unicode_char_entered(self, char):
         self.imgui.unicode_char_entered(char)
 
-if __name__ == '__main__':
 
-    print(f'load complete')
-    # 关闭开屏画面
-    splash.finish(None)
-    mglw.run_window_config(WindowEvents)
+print(f'load complete')
+# 关闭开屏画面
+splash.finish(None)
+mglw.run_window_config(WindowEvents)

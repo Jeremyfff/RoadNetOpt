@@ -453,16 +453,18 @@ class MainFrameBufferTexture(FrameBufferTexture):
         self.region_cluster = RegionCluster()
 
         # lims
-        self.x_lim = None
-        self.y_lim = None
+        self.x_lim = None  # 世界坐标
+        self.y_lim = None  # 世界坐标
 
         # params
         self.enable_render_roads = True
         self.enable_render_buildings = False
         self.enable_render_regions = False
         self.enable_render_nodes = False
+        self.enable_mouse_pointer = True  # 是否显示鼠标光标定位十字
 
-        self._any_change = False
+        self._any_change = False  # 是否有任何变化
+        self._lazy_update = True  # 只有当有变化发生时才会渲染
 
         self._need_check_roads = True
         self._need_check_buildings = True
@@ -488,8 +490,13 @@ class MainFrameBufferTexture(FrameBufferTexture):
         self.region_gl = graphic_uitls.RegionGL('region', _resf)
         self.node_gl = graphic_uitls.NodeGL('node', _nsf)
         self.highlighted_road_gl = graphic_uitls.RoadGL('highlighted_road', _hsf)
+        self.pointer_gl = graphic_uitls.PointerGL()
+        self.rect_gl = graphic_uitls.RectGL('drag_selection')
 
         self._road_idx_texture = RoadIdxFrameBufferTexture('road_idx', self.width, self.height)
+
+        self._drag_selection_start_pos = None
+        self._cached_road_idx_img_arr = None
 
     def show_imgui_display_editor(self):
         road_changed = False
@@ -501,9 +508,12 @@ class MainFrameBufferTexture(FrameBufferTexture):
         clicked, self.enable_render_roads = imgui.checkbox('render roads', True)
         if clicked:
             imgui.open_popup('warning')
+
         if imgui.begin_popup_modal('warning',
                                    flags=imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_ALWAYS_AUTO_RESIZE).opened:
-            size = g.mWindowSize
+
+            size = imgui.get_window_size()
+            imgui.set_window_position(g.mWindowSize[0] / 2 - size.x / 2, g.mWindowSize[1] / 2 - size.y / 2)
             imgui.text('不能关闭道路的显示')
             if imgui.button('知道了', width=size.x - 16, height=22):
                 imgui.close_current_popup()
@@ -546,6 +556,14 @@ class MainFrameBufferTexture(FrameBufferTexture):
             self.clear_building_data()
         if region_changed:
             self.clear_region_data()
+
+    def show_imgui_main_texture_settings(self):
+        changed, value = imgui.drag_float('resolution scale', 1 / g.TEXTURE_SCALE, 0.01, 0.1, 2)
+        if changed:
+            g.TEXTURE_SCALE = 1 / value
+        clicked, state = imgui.checkbox('show pointer', self.enable_mouse_pointer)
+        if clicked:
+            self.enable_mouse_pointer = state
 
     def _check_roads(self):
         """
@@ -647,24 +665,57 @@ class MainFrameBufferTexture(FrameBufferTexture):
     def _in_regions(self, pos):
         return 0 <= pos[0] < self.width and 0 <= pos[1] < self.height
 
-    def get_road_idx_by_mouse_pos(self, mouse_pos) -> Union[int, None]:
-        if not self._in_regions(mouse_pos): return None
-        if self.x_lim is None or self.y_lim is None: return None
+    def _render_and_get_road_idx_uint8_img_arr(self):
         self._road_idx_texture.fbo.use()
-        self._road_idx_texture.fbo.clear(1, 1, 1, 0)
+        self._road_idx_texture.fbo.clear(1, 1, 1, 0)  # 前三个通道表示id， alpha通道表示是否有道路
         self._road_idx_texture.road_idx_gl.update_prog(self.x_lim, self.y_lim)
         self._road_idx_texture.road_idx_gl.render()
         texture = self._road_idx_texture.texture
         img_uint8 = np.frombuffer(self._road_idx_texture.fbo.color_attachments[0].read(), dtype=np.uint8).reshape(
             (texture.height, texture.width, 4))
-        color_uint8 = img_uint8[mouse_pos[1], mouse_pos[0], :]
+        return img_uint8
+
+    def get_road_idx_by_mouse_pos(self, texture_space_mouse_pos) -> Union[int, None]:
+        if not self._in_regions(texture_space_mouse_pos): return None
+        if self.x_lim is None or self.y_lim is None: return None
+        img_uint8 = self._render_and_get_road_idx_uint8_img_arr()
+        color_uint8 = img_uint8[texture_space_mouse_pos[1], texture_space_mouse_pos[0], :]
         if color_uint8[3] == 0: return None  # click on blank
         color_uint8 = color_uint8.copy()
-        color_uint8[3] = 0.0  # set the alpha channel to 0
-        idx_uint32 = color_uint8.view(np.uint32)  # turn the data format into uint32
-        idx = int((idx_uint32 / 3)[0])
-        print(f'idx = {idx}')
-        return idx
+        color_uint8[3] = 0
+        idx_uint32 = color_uint8.view(np.uint32)
+        idx_float = idx_uint32.astype(np.float32) / 3.0
+        idx_int = int(np.round(idx_float)[0])
+        return idx_int
+
+    def start_drag_selection(self, texture_space_mouse_pos):
+        if not self._in_regions(texture_space_mouse_pos): return
+        if self.x_lim is None or self.y_lim is None: return
+        self._drag_selection_start_pos = texture_space_mouse_pos
+        self._cached_road_idx_img_arr = self._render_and_get_road_idx_uint8_img_arr()
+        self._any_change = True
+
+    def update_drag_selection(self, texture_space_mouse_pos):
+        if self._drag_selection_start_pos is None or self._cached_road_idx_img_arr is None:
+            return None
+        x_min = min(texture_space_mouse_pos[0], self._drag_selection_start_pos[0])
+        x_max = max(texture_space_mouse_pos[0], self._drag_selection_start_pos[0])
+        y_min = min(texture_space_mouse_pos[1], self._drag_selection_start_pos[1])
+        y_max = max(texture_space_mouse_pos[1], self._drag_selection_start_pos[1])
+        img_arr_slice = self._cached_road_idx_img_arr[y_min:y_max, x_min:x_max, :].reshape(-1, 4)
+        img_arr_slice = img_arr_slice[img_arr_slice[:, 3] != 0]
+        arr_uint8 = np.unique(img_arr_slice, axis=0)
+        arr_uint8[:, 3] = 0
+        arr_uint32 = arr_uint8.view(np.uint32).flatten()
+        arr_float = arr_uint32.astype(np.float32) / 3.0
+        idx_list = np.round(arr_float).astype(np.int32).tolist()
+        self._any_change = True
+        return idx_list
+
+    def end_drag_selection(self):
+        self._drag_selection_start_pos = None
+        self._cached_road_idx_img_arr = None
+        self._any_change = True
 
     def clear_cache(self):
         self.x_lim = None
@@ -698,13 +749,34 @@ class MainFrameBufferTexture(FrameBufferTexture):
     def clear_region_data(self):
         self._need_check_regions = True
 
+    def clear_node_data(self):
+        self._need_check_nodes = True
+
     def clear_x_y_lim(self):
         self.x_lim = None
         self.y_lim = None
 
     @property
-    def ratio(self):
+    def texture_ratio(self):
         return self.width / self.height
+
+    @property
+    def world_space_width(self):
+        if self.x_lim is None:
+            return 0
+        else:
+            return self.x_lim[1] - self.x_lim[0]
+
+    @property
+    def world_space_height(self):
+        if self.y_lim is None:
+            return 0
+        else:
+            return self.y_lim[1] - self.y_lim[0]
+
+    @property
+    def mouse_pos_percent(self):
+        return float(g.mMousePosInImage[0]) / self.width, float(g.mMousePosInImage[1]) / self.height
 
     def zoom_all(self):
         print('zoom all')
@@ -714,31 +786,30 @@ class MainFrameBufferTexture(FrameBufferTexture):
         y_size *= 1.05
         self.y_lim = (y_center - y_size / 2, y_center + y_size / 2)
         x_center = (x_lim[0] + x_lim[1]) / 2
-        x_size = self.ratio * y_size
+        x_size = self.texture_ratio * y_size
         self.x_lim = (x_center - x_size / 2, x_center + x_size / 2)
         self._any_change = True
 
     def pan(self, texture_space_delta: tuple):
         if self.x_lim is None or self.y_lim is None:
             return
-        x_ratio = (self.x_lim[1] - self.x_lim[0]) / self.width
-        y_ratio = (self.y_lim[1] - self.y_lim[0]) / self.height
+        x_ratio = self.world_space_width / self.width
+        y_ratio = self.world_space_height / self.height
         x_delta = texture_space_delta[0] * -x_ratio
         y_delta = texture_space_delta[1] * y_ratio
         self.x_lim = (self.x_lim[0] + x_delta, self.x_lim[1] + x_delta)
         self.y_lim = (self.y_lim[0] + y_delta, self.y_lim[1] + y_delta)
         self._any_change = True
 
-    def zoom(self, texture_space_center, percent):
+    def zoom(self, texture_space_center: tuple, percent: float):
         if self.x_lim is None or self.y_lim is None:
             return
         if percent == 0:
             return
-
         ts_cx = texture_space_center[0]
         ts_cy = self.height - texture_space_center[1]
-        ws_cx = (self.x_lim[1] - self.x_lim[0]) * ts_cx / self.width + self.x_lim[0]
-        ws_cy = (self.y_lim[1] - self.y_lim[0]) * ts_cy / self.height + self.y_lim[0]
+        ws_cx = self.world_space_width * ts_cx / self.width + self.x_lim[0]
+        ws_cy = self.world_space_height * ts_cy / self.height + self.y_lim[0]
 
         nx = self.x_lim[0] - ws_cx
         px = self.x_lim[1] - ws_cx
@@ -772,6 +843,16 @@ class MainFrameBufferTexture(FrameBufferTexture):
         if self.enable_render_nodes:
             self.node_gl.update_prog(self.x_lim, self.y_lim)
             self.node_gl.render()
+        if self.enable_mouse_pointer:
+            self.pointer_gl.update_prog(offset=self.mouse_pos_percent, texture_size=self.texture.size)
+            self.pointer_gl.render()
+        if self._drag_selection_start_pos is not None:
+            start = (float(self._drag_selection_start_pos[0]) / self.width,
+                     float(self._drag_selection_start_pos[1]) / self.height)
+            size = (float(g.mMousePosInImage[0] - self._drag_selection_start_pos[0]) / self.width,
+                    float(g.mMousePosInImage[1] - self._drag_selection_start_pos[1]) / self.height)
+            self.rect_gl.update_prog(start=start, size=size)
+            self.rect_gl.render()
 
     def update(self, **kwargs):
         """每帧调用"""
@@ -795,7 +876,7 @@ class MainFrameBufferTexture(FrameBufferTexture):
         if self.enable_render_nodes:
             self._check_nodes()
 
-        if self._any_change:
+        if self._any_change or self.enable_mouse_pointer or not self._lazy_update:
             self.render(**kwargs)
             self._any_change = False
 

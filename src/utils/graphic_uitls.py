@@ -12,6 +12,7 @@ from gui import global_var as g
 import geopandas as gpd
 from geo import Road, Building, Region
 import torch
+from lib.accelerator import cAccelerator
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -244,19 +245,14 @@ class GeoGL:
         if self.gdfs is None or len(self.gdfs) == 0:
             # self.cached_vertices = None
             # self.buffer = None
-            print(f'{self.name} gdf is none, set cached vertices and buffer to None')
             return
         vertices = self.vertices_data_get_func(self.gdfs, self.style_factory)
-        print(self.name)
-        print(vertices)
         if self.buffer is None or len(vertices) != len(self.cached_vertices):
-            print(f'{self.name} creating new buffer')
             self.vao._buffers = []
             self.vao.vaos = {}
             self.buffer = self.vao.buffer(vertices, '2f 4f', ['in_vert', 'in_color'])
         else:
             self.buffer.write(vertices)
-            print(f'{self.name} use old buffer')
         self.cached_vertices = vertices
 
     def update_prog(self, x_lim: tuple, y_lim: tuple):
@@ -264,7 +260,6 @@ class GeoGL:
         self.prog['m_ylim'].value = np.array(y_lim, dtype=np.float32)
 
     def render(self):
-        print(f'{self.name} rendering\n vertices is None?:{str(self.cached_vertices is None)}, gdfs is None?:{str(self.gdfs is None)}, buffer is None?:{str(self.buffer is None)}')
         if self.cached_vertices is None or self.gdfs is None or self.buffer is None:
             return
 
@@ -285,9 +280,88 @@ class RegionGL(GeoGL):
     def __init__(self, name, style_factory):
         super().__init__(name, style_factory, Region.get_vertices_data)
 
+
 class NodeGL(GeoGL):
     def __init__(self, name, style_factory):
         super().__init__(name, style_factory, Road.get_node_vertices_data)
 
+
+class PointerGL:
+    instance: 'PointerGL' = None
+
+    def __init__(self):
+        assert PointerGL.instance is None, 'only one PointerGL can be created'
+        PointerGL.instance = self
+        self.ctx = g.mCtx
+        self.vao = VAO('pointer')
+
+        self.prog = g.mWindowEvent.load_program('programs/pointer.glsl')
+        self.prog['m_offset'].value = (0, 0)
+        self.buffer = None
+        self.set_to_cross_mode()
+
+    def set_to_point_mode(self):
+        self.vao._buffers = []
+        self.vao.vaos = {}
+        coord = np.array([0.0, 0.0], dtype=np.float32).tobytes()
+        color = np.array([1.0, 1.0, 0.0, 1.0], dtype=np.float32).tobytes()
+        width = np.array([5.0], dtype=np.float32).tobytes()
+        vertices = np.frombuffer(
+            bytes(cAccelerator.TriangulatePoints(coord, color, width)),
+            dtype=np.float32).reshape(-1, 6)
+        np.set_printoptions(linewidth=np.inf, suppress=True)
+        self.buffer = self.vao.buffer(vertices, '2f 4f', ['in_vert', 'in_color'])
+
+    def set_to_cross_mode(self):
+        self.vao._buffers = []
+        self.vao.vaos = {}
+        color = [1.0, 1.0, 1.0, 0.8]
+        vertex_coords = np.array([[[-10000.0, 0.0], [10000, 0]], [[0, -10000], [0, 10000]]], dtype=np.float32).tobytes()
+        colors = np.array([color, color], dtype=np.float32).tobytes()
+        widths = np.array([2, 2], dtype=np.float32).tobytes()
+        first = np.array([0, 2], dtype=np.int32).tobytes()
+        num_vertices = np.array([2, 2], dtype=np.int32).tobytes()
+        vertices = np.frombuffer(
+            bytes(cAccelerator.TriangulatePolylines(vertex_coords, first, num_vertices, colors, widths)),
+            dtype=np.float32).reshape(-1, 6)
+        self.buffer = self.vao.buffer(vertices, '2f 4f', ['in_vert', 'in_color'])
+
+    def update_prog(self, offset: tuple, texture_size: tuple):
+        self.prog['m_offset'].value = offset
+        self.prog['m_texture_size'].value = texture_size
+
+    def render(self):
+        self.vao.render(self.prog, mode=moderngl.TRIANGLES)
+
+
+class RectGL:
+    def __init__(self, name):
+        self.ctx = g.mCtx
+        self.vao = VAO(name)
+
+        self.prog = g.mWindowEvent.load_program('programs/rect.glsl')
+        self.prog['m_start'].value = (0, 0)
+        self.prog['m_size'].value = (1, 1)
+        self.prog['m_alpha'].value = 0.9
+
+        vertex_coords = np.array([[-1.0, -1.0], [-1.0, 1.0], [1.0, 1.0], [1.0, -1.0]], dtype=np.float32).tobytes()
+        colors = np.array([[1.0, 1.0, 1.0, 1.0]], dtype=np.float32).tobytes()
+        first = np.array([0], dtype=np.int32).tobytes()
+        num_vertices = np.array([4], dtype=np.int32).tobytes()
+        vertices = np.frombuffer(
+            bytes(cAccelerator.TriangulatePolygons(vertex_coords, first, num_vertices, colors)),
+            dtype=np.float32).reshape(-1, 6)
+        self.buffer = self.vao.buffer(vertices, '2f 4f', ['in_vert', 'in_color'])
+
+    def update_prog(self, start: tuple, size: tuple):
+        """
+        :param start: (0 to 1) texture space
+        :param size:  (0 to 1) texture space
+        """
+        self.prog['m_start'].value = start
+        self.prog['m_size'].value = size
+
+    def render(self):
+        self.vao.render(self.prog, mode=moderngl.TRIANGLES)
 
 # endregion

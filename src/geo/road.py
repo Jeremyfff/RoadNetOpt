@@ -320,6 +320,10 @@ class Road(Object):
         road = Road.__edge_gdf.iloc[idx]
         return road
 
+    @staticmethod
+    def get_roads_by_indexes(idx_list: list[int]) -> gpd.GeoDataFrame:
+        roads = Road.__edge_gdf.iloc[idx_list]
+        return roads
 
     @staticmethod
     def get_roads_by_attr_and_value(attr: str, value: any) -> gpd.GeoDataFrame:
@@ -719,11 +723,11 @@ class Road(Object):
         return vertices
 
     @staticmethod
-    def get_node_vertices_data(nodes, style_factory):
+    def get_node_vertices_data(nodes: gpd.GeoDataFrame, style_factory):
         params = style_factory(nodes)
         colors = params[0]
         widths = params[1]
-        vertex_coords = np.array(nodes['coord'].values, dtype=np.float32)
+        vertex_coords = np.concatenate(nodes['coord'].apply(np.array).values, axis=0).astype(np.float32)
         print(vertex_coords.shape)
         vertex_coords = vertex_coords.tobytes()  # 4 + 4 bytes
         colors = np.array(colors, dtype=np.float32)

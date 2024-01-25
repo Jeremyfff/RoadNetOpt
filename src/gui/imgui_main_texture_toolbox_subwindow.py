@@ -21,7 +21,7 @@ print('main_texture_toolbox subwindow loaded')
 def show():
     global mCurrentRoadDisplayOption, mCurrentBuildingDisplayOption, \
         mCurrentRegionDisplayOption, mPinSelectEditor, mPinSelectEditorPos
-    tool_set_button_num = 3  # 在这里更改按钮个数
+    tool_set_button_num = 4  # 在这里更改按钮个数
 
     imgui.set_next_window_position(*g.mImageWindowInnerPos)
     imgui.set_next_window_size(g.DEFAULT_IMAGE_BUTTON_WIDTH + 22,
@@ -29,6 +29,16 @@ def show():
     flags = imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_COLLAPSE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE
     expanded, _ = imgui.begin('main texture subwindow', False, flags)
     g.mHoveringMainTextureSubWindow = imgui_c.is_hovering_window()
+
+    # 显示图层设置
+    if imgui.image_button(IconManager.icons['stack-fill'], g.DEFAULT_IMAGE_BUTTON_WIDTH,
+                          g.DEFAULT_IMAGE_BUTTON_HEIGHT):
+        imgui.open_popup('display_layer_editor')
+    imgui_c.tooltip('显示图层设置')
+    if imgui.begin_popup('display_layer_editor'):
+        g.mHoveringMainTextureSubWindow = True
+        GraphicManager.instance.main_texture.show_imgui_display_editor()
+        imgui.end_popup()
 
     # 显示样式设置
     if imgui.image_button(IconManager.icons['paint-fill'], g.DEFAULT_IMAGE_BUTTON_WIDTH,
@@ -41,17 +51,9 @@ def show():
             road_style_change_callback=GraphicManager.instance.main_texture.clear_road_data,
             building_style_change_callback=GraphicManager.instance.main_texture.clear_building_data,
             region_style_change_callback=GraphicManager.instance.main_texture.clear_region_data,
+            node_style_change_callback=GraphicManager.instance.main_texture.clear_node_data,
+            highlight_style_change_callback=GraphicManager.instance.main_texture.clear_highlight_data
         )
-        imgui.end_popup()
-
-    # 显示图层设置
-    if imgui.image_button(IconManager.icons['stack-fill'], g.DEFAULT_IMAGE_BUTTON_WIDTH,
-                          g.DEFAULT_IMAGE_BUTTON_HEIGHT):
-        imgui.open_popup('display_layer_editor')
-    imgui_c.tooltip('显示图层设置')
-    if imgui.begin_popup('display_layer_editor'):
-        g.mHoveringMainTextureSubWindow = True
-        GraphicManager.instance.main_texture.show_imgui_display_editor()
         imgui.end_popup()
 
     # 选择工具
@@ -70,6 +72,16 @@ def show():
         expanded, mPinSelectEditor = imgui.begin('select_editor_subwindow', True, imgui.WINDOW_NO_TITLE_BAR)
         imgui_select_editor_content()
         imgui.end()
+
+    # 图形设置
+    if imgui.image_button(IconManager.icons['settings-4-fill'], g.DEFAULT_IMAGE_BUTTON_WIDTH,
+                          g.DEFAULT_IMAGE_BUTTON_HEIGHT):
+        imgui.open_popup('main_texture_settings')
+    imgui_c.tooltip('图形设置')
+    if imgui.begin_popup('main_texture_settings'):
+        g.mHoveringMainTextureSubWindow = True
+        GraphicManager.instance.main_texture.show_imgui_main_texture_settings()
+        imgui.end_popup()
     imgui.end()
 
 

@@ -1,6 +1,7 @@
 import os
 import pickle
 import sys
+import traceback
 
 import imgui
 import numpy as np
@@ -55,31 +56,51 @@ def _handle_global_common_mouse_interaction():
 mLastTextureSpaceDeltaX = 0
 mLastTextureSpaceDeltaY = 0
 mIsMouseDragging = False
-
+mSelectedRoadsBeforeDrag = {}
 
 def _handle_main_texture_common_mouse_interaction():
     """main texture窗口显示时的鼠标交互， 鼠标可在窗口外面"""
     global mLastTextureSpaceDeltaX, mLastTextureSpaceDeltaY, mIsMouseDragging
+    # middle button
     if imgui.is_mouse_dragging(2):
-        if not mIsMouseDragging:
+        if not mIsMouseDragging and _is_hovering_image_window():  # start point
             imgui.reset_mouse_drag_delta(2)
             mIsMouseDragging = True
             return
-        screen_space_mouse_delta = imgui.get_mouse_drag_delta(2)
-        texture_space_delta_x = screen_space_mouse_delta[0] / float(g.mTextureScale)
-        texture_space_delta_y = screen_space_mouse_delta[1] / float(g.mTextureScale)
-        GraphicManager.instance.main_texture.pan(((texture_space_delta_x - mLastTextureSpaceDeltaX),
-                                                  (texture_space_delta_y - mLastTextureSpaceDeltaY)))
-        mLastTextureSpaceDeltaX = texture_space_delta_x
-        mLastTextureSpaceDeltaY = texture_space_delta_y
+        if mIsMouseDragging:
+            screen_space_mouse_delta = imgui.get_mouse_drag_delta(2)
+            texture_space_delta_x = screen_space_mouse_delta[0] / float(g.TEXTURE_SCALE)
+            texture_space_delta_y = screen_space_mouse_delta[1] / float(g.TEXTURE_SCALE)
+            GraphicManager.instance.main_texture.pan(((texture_space_delta_x - mLastTextureSpaceDeltaX),
+                                                      (texture_space_delta_y - mLastTextureSpaceDeltaY)))
+            mLastTextureSpaceDeltaX = texture_space_delta_x
+            mLastTextureSpaceDeltaY = texture_space_delta_y
     if imgui.is_mouse_released(2):
         mIsMouseDragging = False
         mLastTextureSpaceDeltaX = 0
         mLastTextureSpaceDeltaY = 0
         imgui.reset_mouse_drag_delta(2)
-    mouse_scroll_y = imgui.get_io().mouse_wheel
-    if mouse_scroll_y != 0:
-        GraphicManager.instance.main_texture.zoom(g.mMousePosInImage, 1.0 - mouse_scroll_y * 0.1)
+    # left button
+    if imgui.is_mouse_dragging(0):
+        if not mIsMouseDragging and _is_hovering_image_window():
+            imgui.reset_mouse_drag_delta(0)
+            mIsMouseDragging = True
+            _start_drag_selection()
+            return
+        if mIsMouseDragging:
+            if g.mShift:
+                _select_roads_by_drag_selection(add_mode=True)
+            elif g.mCtrl:
+                _select_roads_by_drag_selection(add_mode=True)
+            elif g.mAlt:
+                _deselect_roads_by_drag_selection()
+            else:
+                _select_roads_by_drag_selection(add_mode=False)
+    if imgui.is_mouse_released(0):
+        _end_drag_selection()
+        mIsMouseDragging = False
+        imgui.reset_mouse_drag_delta(0)
+
 
 
 def _handle_main_texture_normal_mode_mouse_interaction():
@@ -92,6 +113,9 @@ def _handle_main_texture_normal_mode_mouse_interaction():
         else:
             _select_road_by_current_mouse_pos(add_mode=False)
 
+    mouse_scroll_y = imgui.get_io().mouse_wheel
+    if mouse_scroll_y != 0:
+        GraphicManager.instance.main_texture.zoom(g.mMousePosInImage, 1.0 - mouse_scroll_y * 0.1)
 
 def _handle_main_texture_add_mode_mouse_interation():
     """main texture窗口显示，手动添加道路模式，并且鼠标在窗口内部的交互"""
@@ -124,6 +148,7 @@ def _handle_global_common_keyboard_interation(key, action, modifiers):
         g.mCtrl = False
         g.mShift = False
         g.mAlt = False
+
 
 def _handle_main_texture_common_keyboard_interation(key, action, modifiers):
     """main texture 显示时通用的键盘事件"""
@@ -169,10 +194,35 @@ def _get_road_by_current_mouse_pos():
         return None
     try:
         road = Road.get_road_by_index(idx)
-        print(road['uid'])
         return road
     except Exception as e:
+        print(e)
         return None
+
+
+def _start_drag_selection():
+    global mSelectedRoadsBeforeDrag
+    mSelectedRoadsBeforeDrag = g.mSelectedRoads.copy()
+    GraphicManager.instance.main_texture.start_drag_selection(g.mMousePosInImage)
+
+
+def _get_roads_by_drag_selection():
+    idx_list = GraphicManager.instance.main_texture.update_drag_selection(g.mMousePosInImage)
+    if idx_list is None:
+        return None
+    try:
+        roads = Road.get_roads_by_indexes(idx_list)
+        return roads
+    except Exception as e:
+        traceback.print_stack()
+        print(e)
+        return None
+
+
+def _end_drag_selection():
+    global mSelectedRoadsBeforeDrag
+    mSelectedRoadsBeforeDrag = None
+    GraphicManager.instance.main_texture.end_drag_selection()
 
 
 def _select_road_by_current_mouse_pos(add_mode=False):
@@ -208,6 +258,26 @@ def _deselect_road_by_current_mouse_pos():
     g.mSelectedRoads.pop(uid)
     GraphicManager.instance.main_texture.clear_highlight_data()
 
+def _select_roads_by_drag_selection(add_mode = False):
+    roads = _get_roads_by_drag_selection()
+    if roads is None:
+        return
+    if not add_mode:
+        g.mSelectedRoads = {}
+    for uid, road in roads.iterrows():
+        g.mSelectedRoads[uid] = road
+    GraphicManager.instance.main_texture.clear_highlight_data()
+
+
+def _deselect_roads_by_drag_selection():
+    roads = _get_roads_by_drag_selection()
+    if roads is None:
+        return
+    g.mSelectedRoads = mSelectedRoadsBeforeDrag.copy()
+    for uid, road in roads.iterrows():
+        if uid in g.mSelectedRoads:
+            g.mSelectedRoads.pop(uid)
+    GraphicManager.instance.main_texture.clear_highlight_data()
 
 def _clear_selected_roads_and_update_graphic():
     if len(g.mSelectedRoads) > 0:
