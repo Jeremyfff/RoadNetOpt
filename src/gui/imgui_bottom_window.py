@@ -19,5 +19,7 @@ def show():
     imgui.same_line()
     if imgui.button('输出窗口'):
         g.mLoggingWindowOpened = True
-
+    imgui.same_line()
+    if imgui.button('调试窗口'):
+        g.mDebugWindowOpened = True
     imgui.end()

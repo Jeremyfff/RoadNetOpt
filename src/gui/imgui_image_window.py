@@ -26,23 +26,27 @@ def show():
     imgui.set_next_window_size(screen_width - g.LEFT_WINDOW_WIDTH, screen_height - g.BOTTOM_WINDOW_HEIGHT)
     imgui.set_next_window_position(g.LEFT_WINDOW_WIDTH, 0)
     imgui.begin("image window", False, flags=flags)
+
     mImageWindowPos = (int(imgui.get_window_position()[0]), int(imgui.get_window_position()[1]))
     mImageWindowSize = imgui.get_window_size()
     g.mImageWindowInnerSize = (int(mImageWindowSize[0] - g.IMAGE_WINDOW_INDENT_LEFT - g.IMAGE_WINDOW_INDENT_RIGHT),
-                               int(mImageWindowSize[1] - g.FONT_SIZE - g.IMAGE_WINDOW_INDENT_TOP
+                               int(mImageWindowSize[1] - g.IMAGE_WINDOW_INDENT_TOP
                                    - g.IMAGE_WINDOW_INDENT_BOTTOM))
     g.mImageSize = (int(g.mImageWindowInnerSize[0] / g.TEXTURE_SCALE),
                     int(g.mImageWindowInnerSize[1] / g.TEXTURE_SCALE))
     g.mImageWindowInnerPos = (int(mImageWindowPos[0] + g.IMAGE_WINDOW_INDENT_LEFT),
-                              int(mImageWindowPos[1] + g.FONT_SIZE + g.IMAGE_WINDOW_INDENT_TOP))
+                              int(mImageWindowPos[1] + g.IMAGE_WINDOW_INDENT_TOP))
     vec1 = (int(imgui.get_mouse_position()[0]), int(imgui.get_mouse_position()[1]))
     vec2 = g.mImageWindowInnerPos
     mImageWindowMousePos = (vec1[0] - vec2[0], vec1[1] - vec2[1])
     g.mMousePosInImage = (
         int(mImageWindowMousePos[0] / g.TEXTURE_SCALE), int(mImageWindowMousePos[1] / g.TEXTURE_SCALE))
     g.mHoveringImageWindow = imgui_c.is_hovering_window()
+    g.mFocusingOnImageWindow = imgui.is_window_focused()
+    g.mImageWindowDrawList = imgui.get_window_draw_list()
     textures_to_delete = set()
     flags = imgui.TAB_BAR_AUTO_SELECT_NEW_TABS | imgui.TAB_BAR_TAB_LIST_POPUP_BUTTON
+
     with imgui.begin_tab_bar('image_tab_bar', flags=flags):
         for graphic_texture in GraphicManager.instance.textures.values():
             if not graphic_texture.exposed:
@@ -53,6 +57,7 @@ def show():
                     imgui.image(graphic_texture.texture_id, graphic_texture.width * g.TEXTURE_SCALE,
                                 graphic_texture.height * g.TEXTURE_SCALE)
                     g.mShowingMainTextureWindow = True
+                    GraphicManager.instance.main_texture.render_draw_list()
                     imgui_main_texture_toolbox_subwindow.show()
                 else:
                     imgui.image(graphic_texture.texture_id, graphic_texture.width * g.TEXTURE_SCALE,
@@ -74,6 +79,7 @@ def show():
                 imgui.end_tab_item()
             if not opened:
                 textures_to_delete.add(graphic_texture.name)
+
     imgui.end()
 
     for name in textures_to_delete:

@@ -18,6 +18,7 @@ from tqdm import tqdm
 from utils.common_utils import timer, duplicate_filter, id_to_rgb, to_triangles
 from lib.accelerator import cAccelerator
 from gui import global_var as g
+from sklearn.cluster import DBSCAN
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
@@ -105,8 +106,10 @@ class Road(Object):
         因此对于node的任何更新，必须同步到Road.__coord_to_node_uid中，
         否则将引起错误）
         """
+
         if not isinstance(coord, tuple):
             coord = tuple(coord)
+        assert len(coord) == 2
         if coord in Road.__coord_to_node_uid:
             return Road.__coord_to_node_uid[coord]
         else:
@@ -160,6 +163,24 @@ class Road(Object):
     def _any_road_using_node(uid) -> bool:
         """判断是否有其他任何道路正在使用该node"""
         return any(Road.__edge_gdf['u'].eq(uid)) or any(Road.__edge_gdf['v'].eq(uid))
+    @staticmethod
+    def get_close_nodes():
+        print('a')
+        print(Road.__node_gdf['coord'].apply(np.array).values)
+        vertex_coords = np.vstack(Road.__node_gdf['coord'].apply(np.array).values).astype(np.float32)
+        print(vertex_coords.shape)
+
+        dbscan = DBSCAN(eps=0.1, min_samples=2)  # eps 是领域的大小，min_samples 是领域内最小样本数
+        labels = dbscan.fit_predict(vertex_coords)
+        # 将点按簇进行分组
+        groups = {}
+        for i, label in enumerate(labels):
+            if label not in groups:
+                groups[label] = [i]
+            else:
+                groups[label].append(i)
+        print(groups)
+        return groups
 
     # endregion
 
@@ -440,9 +461,8 @@ class Road(Object):
     def add_points_to_road(road: pd.Series, points: np.ndarray, update_nodes_immediately=True):
         assert len(points.shape) == 2
         assert isinstance(road, pd.Series)
-        org_geo = road['geometry']
-        org_points = np.array(list(org_geo.coords))
-        new_points = np.vstack([org_points, points])
+        org_coords = road['coords']
+        new_points = np.vstack([org_coords, points])
         return Road.update_road_points(road, new_points, update_nodes_immediately)
 
     @staticmethod
@@ -450,18 +470,17 @@ class Road(Object):
         assert len(points.shape) == 2
         assert isinstance(road, pd.Series)
         assert points.shape[0] >= 2
-        org_geo = road['geometry']
         uid = road['uid']
-        org_u = Road._get_coord_uid(org_geo.coords[0])
-        org_v = Road._get_coord_uid(org_geo.coords[-1])
+        org_u = road['u']
+        org_v = road['v']
 
         new_points = points
         new_geo = LineString(new_points)
         new_u = Road._get_coord_uid(new_geo.coords[0])
         new_v = Road._get_coord_uid(new_geo.coords[-1])
 
+        Road.__edge_gdf.at[uid, 'coords'] = new_points
         Road.__edge_gdf.loc[uid, 'geometry'] = new_geo
-        # Road.__edge_gdf.at[uid, 'geometry'] = gpd.GeoSeries([new_geo])
         Road.__edge_gdf.loc[uid, 'u'] = new_u
         Road.__edge_gdf.loc[uid, 'v'] = new_v
         # handle org nodes
@@ -482,9 +501,6 @@ class Road(Object):
         assert isinstance(road, pd.Series)
         uid = road['uid']
         geo = road['geometry']
-        level = road['level']
-        state = road['state']
-
         if not isinstance(geo, LineString):
             logging.warning(f"Road geometry does not contain any LineString. "
                             f"This road ({uid}) will be skipped")
@@ -497,30 +513,38 @@ class Road(Object):
             logging.warning(f"Cut failed. Cut_point is empty. Please check your road geometry."
                             f"This road ({uid}) will be skipped")
             return
-        _pt1 = list(cut_point.coords)[0]
-        _pt2 = list(geo.interpolate(distance + 1e-5, normalized).coords)[0]
-        _dx = _pt2[0] - _pt1[0]
-        _dy = _pt2[1] - _pt1[1]
-        _v = (-_dy, _dx)
-        _v_pt1 = (_pt1[0] + _v[0], _pt1[1] + _v[1])
-        _v_pt2 = (_pt1[0] - _v[0], _pt1[1] - _v[1])
-        cut_line = LineString([_v_pt1, _v_pt2])
-        new_geos = list(split(geo, cut_line).geoms)
-        if len(new_geos) == 1:
-            logging.warning('Failed to split the road into two parts')
-            return np.array(cut_point.coords)
-        if not len(new_geos) == 2:
-            logging.warning(f'The road been split into {len(new_geos)} parts.'
-                            f'This is not allowed.')
-            return
-        for new_geo in new_geos:
-            new_coords = np.array(new_geo.coords)  # (n, 2)
-            Road.add_road_by_coords(new_coords, level=level, state=state)
-        Road.delete_road(road, update_nodes_immediately)  # org nodes will be handled here
-        # handle cache
-        if road['cache']:
-            Road._flag_cached_graph_need_update = True
-        return np.array(cut_point.coords)
+        coord = np.array(cut_point.coords)[0]
+        coord_uid, road_uids = Road.split_road_by_coord(road, coord, update_nodes_immediately)
+        return np.array(Road.__node_gdf.loc[coord_uid]['coord']).reshape(1, 2)
+
+    @staticmethod
+    def split_road_by_coord(road: pd.Series, coord: np.ndarray, update_nodes_immediately=True):
+        coord = coord.reshape(2)
+        org_coords = road['coords']
+        org_level = road['level']
+        org_state = road['state']
+        distances = np.linalg.norm(org_coords - coord, axis=1)
+        closest_point_indices = np.argsort(distances)[:2].tolist()
+        idx1 = min(closest_point_indices)
+        idx2 = max(closest_point_indices)
+        assert idx2 - idx1 == 1
+        coord_uid = Road._get_coord_uid(coord)
+        if coord_uid == road['u'] or coord_uid == road['v']:
+            print(f'use existed coord')
+            road_uids = [road['uid']]
+        else:
+            common_coord = coord.reshape(1, 2)
+            coords1 = np.vstack([org_coords[:idx2, :], common_coord])
+            uid1 = Road.add_road_by_coords(coords1, org_level, org_state, return_uid=True)
+            coords2 = np.vstack([common_coord, org_coords[idx2:, :]])
+            uid2 = Road.add_road_by_coords(coords2, org_level, org_state, return_uid=True)
+            road_uids = [uid1, uid2]
+            coord_uid = Road._get_coord_uid(coord)
+            Road.delete_road(road, update_nodes_immediately)  # org nodes will be handled here
+            # handle cache
+            if road['cache']:
+                Road._flag_cached_graph_need_update = True
+        return coord_uid, road_uids
 
     @staticmethod
     def split_road_by_random_position(road: pd.Series):
@@ -599,9 +623,8 @@ class Road(Object):
         for node in org_nodes:
             roads = Road.get_roads_by_node(node)
             if len(roads) == 2:
-                Road.merge_roads(roads.iloc[0], roads.iloc[1], update_nodes_immediately=False)
+                Road.merge_roads(roads.iloc[0], roads.iloc[1], update_nodes_immediately=True)
         after_node_count = len(Road.__node_gdf)
-        Road._clear_unused_nodes()  # coord to uid 的dict也会被更新
         print(f'优化后节点数: {after_node_count}')
         print(f'{org_node_count - after_node_count}节点被优化')
 

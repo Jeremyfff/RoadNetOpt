@@ -23,6 +23,7 @@ def update_main_graphic():
     GraphicManager.instance.main_texture.update()
 
 
+
 def handle_mouse_event():
     _handle_global_common_mouse_interaction()
     if not g.mShowingMainTextureWindow: return
@@ -57,6 +58,7 @@ mLastTextureSpaceDeltaX = 0
 mLastTextureSpaceDeltaY = 0
 mIsMouseDragging = False
 mSelectedRoadsBeforeDrag = {}
+
 
 def _handle_main_texture_common_mouse_interaction():
     """main texture窗口显示时的鼠标交互， 鼠标可在窗口外面"""
@@ -102,7 +104,6 @@ def _handle_main_texture_common_mouse_interaction():
         imgui.reset_mouse_drag_delta(0)
 
 
-
 def _handle_main_texture_normal_mode_mouse_interaction():
     """main texture窗口显示，普通模式， 并且鼠标在窗口内部的交互"""
     if imgui.is_mouse_clicked(0):  # left
@@ -116,6 +117,7 @@ def _handle_main_texture_normal_mode_mouse_interaction():
     mouse_scroll_y = imgui.get_io().mouse_wheel
     if mouse_scroll_y != 0:
         GraphicManager.instance.main_texture.zoom(g.mMousePosInImage, 1.0 - mouse_scroll_y * 0.1)
+
 
 def _handle_main_texture_add_mode_mouse_interation():
     """main texture窗口显示，手动添加道路模式，并且鼠标在窗口内部的交互"""
@@ -258,7 +260,8 @@ def _deselect_road_by_current_mouse_pos():
     g.mSelectedRoads.pop(uid)
     GraphicManager.instance.main_texture.clear_highlight_data()
 
-def _select_roads_by_drag_selection(add_mode = False):
+
+def _select_roads_by_drag_selection(add_mode=False):
     roads = _get_roads_by_drag_selection()
     if roads is None:
         return
@@ -278,6 +281,7 @@ def _deselect_roads_by_drag_selection():
         if uid in g.mSelectedRoads:
             g.mSelectedRoads.pop(uid)
     GraphicManager.instance.main_texture.clear_highlight_data()
+
 
 def _clear_selected_roads_and_update_graphic():
     if len(g.mSelectedRoads) > 0:

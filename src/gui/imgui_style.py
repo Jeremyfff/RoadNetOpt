@@ -36,7 +36,7 @@ def push_style(dark_mode):
 def push_dark():
     imgui.style_colors_dark()
     style: imgui.core.GuiStyle = imgui.get_style()
-    style.colors[imgui.COLOR_WINDOW_BACKGROUND] = (0.10, 0.10, 0.10, 1.00)
+    style.colors[imgui.COLOR_WINDOW_BACKGROUND] = (0.09, 0.09, 0.09, 1.00)
     style.colors[imgui.COLOR_BORDER] = (0.32, 0.32, 0.32, 0.50)
     style.colors[imgui.COLOR_FRAME_BACKGROUND] = (0.30, 0.30, 0.30, 0.54)
     style.colors[imgui.COLOR_TITLE_BACKGROUND] = (0.21, 0.21, 0.21, 1.00)
@@ -45,7 +45,7 @@ def push_dark():
     style.colors[imgui.COLOR_SEPARATOR] = (0.54, 0.54, 0.54, 0.50)
     style.colors[imgui.COLOR_TAB] = (0.32, 0.32, 0.32, 0.86)
     style.colors[imgui.COLOR_TAB_HOVERED] = (0.25, 0.61, 1.00, 0.80)
-    style.colors[imgui.COLOR_TAB_ACTIVE] = (0.20, 0.41, 0.64, 1.00)
+    style.colors[imgui.COLOR_TAB_ACTIVE] = (0.26, 0.59, 0.98, 1.00)
 
     IconManager.set_mode(True)
     Spinner.set_mode(True)

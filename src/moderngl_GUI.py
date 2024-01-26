@@ -14,39 +14,47 @@ ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 * Wrapped by PyImgui
 * https://pyimgui.readthedocs.io/en/latest/
 
-* 使用ModernGL渲染图形
+* 使用ModernGL window渲染窗口图形
 * https://github.com/moderngl/moderngl-window/
 """
 
+# show splash
 app = QApplication(sys.argv)
-# 创建并显示开屏画面
 splash_pix = QPixmap('splash.png')
 splash = QSplashScreen(splash_pix)
 splash.show()
 
 
-def show_msg(content):
-    splash.showMessage(f"            Version 0.2 | 2024.01.25\n            Loading {content}... \n\n", Qt.AlignBottom, Qt.gray)  # 显示加载进度文本
-    app.processEvents()  # 处理程序事件
+def show_splash_msg(msg):
+    splash.showMessage(f"            Version 0.2 | 2024.01.25\n"
+                       f"            Loading {msg}... \n\n",
+                       Qt.AlignBottom, Qt.gray)
+    app.processEvents()
 
-show_msg('py packages')
+
+show_splash_msg('py packages')
 import importlib
 import pyautogui
 import imgui
 
-show_msg('Moderngl Window')
+show_splash_msg('Moderngl Window')
 from moderngl_window.context.base import BaseKeys
 import moderngl_window as mglw
 from moderngl_window.integrations.imgui import ModernglWindowRenderer
-show_msg('Pytorch')
+
+show_splash_msg('Pytorch')
 import torch
-show_msg('Geo Module')
+
+show_splash_msg('Geo Module')
 from geo import road, building, region
-show_msg('Graphic Module')
+
+show_splash_msg('Graphic Module')
 import graphic_module
-show_msg('Icon Module')
+
+show_splash_msg('Icon Module')
 from gui import icon_module
-show_msg('Gui Module')
+
+show_splash_msg('Gui Module')
 from gui import common
 from gui import global_var as g
 from gui import imgui_style
@@ -56,6 +64,7 @@ from gui import imgui_dxf_subwindow
 from gui import imgui_image_window
 from gui import imgui_info_subwindow
 from gui import imgui_logging_subwindow
+from gui import imgui_debug_subwindow
 from gui import imgui_main_texture_toolbox_subwindow
 from gui import imgui_main_window
 from gui import imgui_home_page
@@ -63,12 +72,12 @@ from gui import imgui_geo_page
 from gui import imgui_training_page
 from gui import imgui_tool_page
 from gui import imgui_settings_page
-show_msg('DDPG')
+
+show_splash_msg('DDPG')
 from DDPG import env2 as env
 
 
-def imgui_debug_window():
-    _, opened = imgui.begin('调试窗口', False)
+def imgui_debug_subwindow_content():
     imgui.text('src')
     if imgui.button('reload graphic module'):
         importlib.reload(graphic_module)
@@ -107,7 +116,9 @@ def imgui_debug_window():
     imgui.text('package DDPG')
     if imgui.button('reload env'):
         importlib.reload(env)
-    imgui.end()
+
+
+imgui_debug_subwindow.set_debug_content(imgui_debug_subwindow_content)
 
 
 class WindowEvents(mglw.WindowConfig):
@@ -148,10 +159,12 @@ class WindowEvents(mglw.WindowConfig):
     def render(self, _time: float, _frametime: float):
         g.mFrameTime = _frametime
         g.mTime = _time
+        # update
         common.update_main_graphic()
         # Render UI to screen
         self.wnd.use()
         self.render_ui()
+
 
     def render_ui(self):
         """Render the UI"""
@@ -165,9 +178,7 @@ class WindowEvents(mglw.WindowConfig):
             imgui_dxf_subwindow.show()
             imgui_info_subwindow.show()
             imgui_logging_subwindow.show()
-
-            imgui_debug_window()
-
+            imgui_debug_subwindow.show()
         g.mFirstLoop = False
 
         imgui.render()

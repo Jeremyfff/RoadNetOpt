@@ -1,6 +1,7 @@
 from typing import Union
 from typing import Union, TypeVar, Callable, Any
 
+import imgui
 import matplotlib
 import numpy as np
 from OpenGL.GL import *
@@ -136,6 +137,12 @@ def image_space_to_world_space(image_x, image_y, x_lim, y_lim, image_width, imag
     return world_x, world_y
 
 
+def image_space_to_image_window_space(image_x, image_y):
+    window_x = g.TEXTURE_SCALE * image_x + g.IMAGE_WINDOW_INDENT_LEFT
+    window_y = g.TEXTURE_SCALE * image_y + g.IMAGE_WINDOW_INDENT_TOP
+    return window_x, window_y
+
+
 def create_texture_from_array_legacy(data):
     if isinstance(data, torch.Tensor):
         data = data.cpu().numpy()
@@ -209,6 +216,84 @@ def blend_img_data(bot: torch.Tensor, top: torch.Tensor):
         blended = blended.to(torch.uint8)
         return blended
 
+
+# region imgui draw list
+class ImguiDrawListObject:
+    """
+    使用imgui draw list方法绘制的图形
+    see https://pyimgui.readthedocs.io/en/latest/reference/imgui.core.html#imgui.core._DrawList.add_circle
+    add_text(self, float pos_x, float pos_y, ImU32 col, str text)
+    add_circle(self, float centre_x, float centre_y, float radius, ImU32 col, int num_segments=0, float thickness=1.0)
+    add_circle_filled(self, float centre_x, float centre_y, float radius, ImU32 col, ImU32 num_segments=0)
+    add_image(self, texture_id, tuple a, tuple b, tuple uv_a=(0, 0), tuple uv_b=(1, 1), ImU32 col=0xffffffff)
+    add_line(self, float start_x, float start_y, float end_x, float end_y, ImU32 col, float thickness=1.0)
+    add_ngon(self, float centre_x, float centre_y, float radius, ImU32 col, int num_segments, float thickness=1.0)
+    add_polyline(self, list points, ImU32 col, ImDrawFlags flags=0, float thickness=1.0)
+    add_quad(self, float point1_x, float point1_y, float point2_x, float point2_y, float point3_x, float point3_y, float point4_x, float point4_y, ImU32 col, float thickness=1.0)
+    add_rect(self, float upper_left_x, float upper_left_y, float lower_right_x, float lower_right_y, ImU32 col, float rounding=0.0, ImDrawFlags flags=0, float thickness=1.0)
+    add_triangle(self, float point1_x, float point1_y, float point2_x, float point2_y, float point3_x, float point3_y, ImU32 col, float thickness=1.0)
+    """
+    def __init__(self):
+        pass
+
+
+class ImguiCircleWorldSpace(ImguiDrawListObject):
+    def __init__(self, world_x, world_y, screen_radius, color, target_draw_list, target_texture):
+        """
+        :param world_x: x_position in world space
+        :param world_y: y_position in world space
+        :param screen_radius: radius on screen
+        :param color: tuple, rgba
+        :param target_draw_list: call "imgui.get_window_draw_list()" in image window
+        :param target_texture: SimpleTexture or FrameBufferTexture or any other class which has width, height, x_lim, y_lim
+        """
+        super().__init__()
+        self.world_x = world_x
+        self.world_y = world_y
+        self.screen_radius = screen_radius
+        self.color = color
+        self.target_draw_list = target_draw_list
+        self.target_texture = target_texture
+
+    def draw(self):
+        if self.target_texture.x_lim is None or self.target_texture.y_lim is None:
+            return
+        image_x, image_y = world_space_to_image_space(self.world_x, self.world_y,
+                                                      self.target_texture.x_lim, self.target_texture.y_lim,
+                                                      self.target_texture.width, self.target_texture.height)
+
+        window_x, window_y = image_space_to_image_window_space(image_x, image_y)
+        window_x += g.LEFT_WINDOW_WIDTH
+        self.target_draw_list.add_circle(window_x, window_y, self.screen_radius, imgui.get_color_u32_rgba(*self.color))
+
+
+class ImguiTextWorldSpace(ImguiDrawListObject):
+    def __init__(self, world_x , world_y, text, color,  target_draw_list, target_texture):
+        """
+
+        :param world_x:
+        :param world_y:
+        :param text:
+        :param color:
+        :param target_draw_list:
+        :param target_texture:
+        """
+        super().__init__()
+        self.world_x = world_x
+        self.world_y = world_y
+        self.text = text
+        self.color = color
+        self.target_draw_list = target_draw_list
+        self.target_texture = target_texture
+
+    def draw(self):
+        image_x, image_y = world_space_to_image_space(self.world_x, self.world_y,
+                                                      self.target_texture.x_lim, self.target_texture.y_lim,
+                                                      self.target_texture.width, self.target_texture.height)
+        window_x, window_y = image_space_to_image_window_space(image_x, image_y)
+        window_x += g.LEFT_WINDOW_WIDTH
+        self.target_draw_list.add_text(window_x, window_y, imgui.get_color_u32_rgba(*self.color), self.text)
+# endregion
 
 # region opengl
 class GeoGL:

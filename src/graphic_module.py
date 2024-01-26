@@ -415,6 +415,9 @@ class FrameBufferTexture:
         self.name = name
         self.width, self.height, self.channel = width, height, channel
         self.exposed = True
+        self.x_lim = None  # 世界坐标
+        self.y_lim = None  # 世界坐标
+
         self.ctx = g.mCtx
         self.fbo = self.ctx.framebuffer(
             color_attachments=self.ctx.texture((width, height), 4)
@@ -451,10 +454,6 @@ class MainFrameBufferTexture(FrameBufferTexture):
         self.road_cluster = RoadCluster()
         self.building_cluster = BuildingCluster()
         self.region_cluster = RegionCluster()
-
-        # lims
-        self.x_lim = None  # 世界坐标
-        self.y_lim = None  # 世界坐标
 
         # params
         self.enable_render_roads = True
@@ -495,6 +494,9 @@ class MainFrameBufferTexture(FrameBufferTexture):
 
         self._road_idx_texture = RoadIdxFrameBufferTexture('road_idx', self.width, self.height)
 
+        # imgui draw list
+        self._close_node_debug_circles: list[graphic_uitls.ImguiCircleWorldSpace] = []
+        self._close_node_debug_texts: list[graphic_uitls.ImguiTextWorldSpace] = []
         self._drag_selection_start_pos = None
         self._cached_road_idx_img_arr = None
 
@@ -823,6 +825,21 @@ class MainFrameBufferTexture(FrameBufferTexture):
         self.y_lim = (ws_cy + ny, ws_cy + py)
         self._any_change = True
 
+    def add_close_node_debug_circle(self, world_x, world_y, screen_radius, tuple_color, content):
+        circle = graphic_uitls.ImguiCircleWorldSpace(world_x, world_y,
+                                                     screen_radius, tuple_color,
+                                                     g.mImageWindowDrawList, self)
+        text = graphic_uitls.ImguiTextWorldSpace(world_x, world_y,
+                                                 content, tuple_color,
+                                                 g.mImageWindowDrawList, self)
+
+        self._close_node_debug_circles.append(circle)
+        self._close_node_debug_texts.append(text)
+
+    def clear_close_node_debug_circles(self):
+        self._close_node_debug_circles = []
+        self._close_node_debug_texts = []
+
     def render(self, **kwargs):
         """被调用即进行渲染，不进行逻辑判断"""
         self.fbo.use()
@@ -880,6 +897,21 @@ class MainFrameBufferTexture(FrameBufferTexture):
             self.render(**kwargs)
             self._any_change = False
 
+    def render_draw_list(self):
+        if self.x_lim is None or self.y_lim is None:
+            return
+        # x, y = self.mouse_pos_percent
+        # y = 1 - y
+        # world_x = x * self.world_space_width + self.x_lim[0]
+        # world_y = y * self.world_space_height + self.y_lim[0]
+        # circle = graphic_uitls.ImguiCircleWorldSpace(world_x, world_y, 10, (1,1,1,1), g.mImageWindowDrawList, self)
+        # circle.draw()
+        if self._close_node_debug_circles:
+            for circle in self._close_node_debug_circles:
+                circle.draw()
+        if self._close_node_debug_texts:
+            for text in self._close_node_debug_texts:
+                text.draw()
 
 class RoadIdxFrameBufferTexture(FrameBufferTexture):
     def __init__(self, name, width, height):
@@ -899,9 +931,6 @@ class AgentFrameBufferTexture(FrameBufferTexture):
         self.road_gl = graphic_uitls.RoadGL('road', _rsf)
         self.building_gl = graphic_uitls.BuildingGL('building', _bsf)
         self.region_gl = graphic_uitls.RegionGL('region', _resf)
-
-        self.x_lim = None
-        self.y_lim = None
 
         self.cached_road_uid = None
 

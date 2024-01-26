@@ -6,7 +6,7 @@ import osmnx as ox
 from pympler.asizeof import asizeof
 from graphic_module import GraphicManager
 from geo import Road, Building, Region
-from utils import io_utils, RoadCluster, BuildingCluster, RegionCluster
+from utils import io_utils, RoadCluster, BuildingCluster, RegionCluster, graphic_uitls
 
 from gui.icon_module import IconManager, Spinner
 from gui import components as imgui_c
@@ -36,6 +36,7 @@ print('geo page loaded')
 def show():
     global mDataPath, mData, mDataSize
     global mOSMNorth, mOSMSouth, mOSMEast, mOSMWest, mOSMGraph, mOSMCurrentNetworkTypeIdx
+
     imgui.push_id('geo_page')
     if imgui.tree_node('[1] 加载数据', imgui.TREE_NODE_DEFAULT_OPEN):
 
@@ -89,7 +90,8 @@ def show():
             Spinner.spinner('data_to_region')
             if imgui.button('->All', 300 * g.GLOBAL_SCALE + 16, 32 * g.GLOBAL_SCALE):
                 Spinner.start('data_to_all', target=lambda _: (
-                    Road.data_to_roads(mData), Building.data_to_buildings(mData), Region.data_to_regions(mData),GraphicManager.instance.main_texture.clear_cache()),
+                    Road.data_to_roads(mData), Building.data_to_buildings(mData), Region.data_to_regions(mData),
+                    GraphicManager.instance.main_texture.clear_cache()),
                               args=(0,))
             Spinner.spinner('data_to_all')
 
@@ -97,11 +99,8 @@ def show():
         expanded, visible = imgui.collapsing_header('[1.2] OSM->GDFs', True)
         if expanded:
             imgui.text('使用osmnx下载数据:')
-            # _, mOSMNorth = imgui.input_float('North', mOSMNorth)
-            # _, mOSMSouth = imgui.input_float('South', mOSMSouth)
-            # _, mOSMEast = imgui.input_float('East', mOSMEast)
-            # _, mOSMWest = imgui.input_float('West', mOSMWest)
-            _, (mOSMNorth, mOSMSouth, mOSMEast, mOSMWest) = imgui.input_float4('NSEW', mOSMNorth, mOSMSouth, mOSMEast, mOSMWest)
+            _, (mOSMNorth, mOSMSouth, mOSMEast, mOSMWest) = imgui.input_float4('NSEW', mOSMNorth, mOSMSouth, mOSMEast,
+                                                                               mOSMWest)
             _, mOSMCurrentNetworkTypeIdx = imgui.combo('Network Type', mOSMCurrentNetworkTypeIdx, mOSMNetworkTypes)
             if imgui.button('Download', 260 * g.GLOBAL_SCALE, 32 * g.GLOBAL_SCALE):
                 Spinner.start('download_osm', target=
@@ -119,6 +118,28 @@ def show():
         if expanded:
             with imgui.begin_tab_bar('geo_op_tab_bar'):
                 if imgui.begin_tab_item('Road').selected:
+                    if imgui.button('get close nodes'):
+                        try:
+                            GraphicManager.instance.main_texture.clear_close_node_debug_circles()
+                            groups = Road.get_close_nodes()
+                            for label, idx_list in groups.items():
+                                if label == -1:
+                                    continue
+                                avg_x, avg_y = 0, 0
+                                contents = []
+                                for idx in idx_list:
+                                    node = Road.get_all_nodes().iloc[idx]
+                                    coord = node['coord']
+                                    contents.append(f'coord [{coord}], idx [{idx}]')
+                                    avg_x, avg_y = avg_x + coord[0], avg_y + coord[1]
+                                content = "\n".join(contents)
+                                avg_x, avg_y = avg_x / len(idx_list), avg_y / len(idx_list)
+                                GraphicManager.instance.main_texture.add_close_node_debug_circle(avg_x, avg_y, 20,
+                                                                                                 (1, 1, 0, 1),content)
+                        except Exception as e:
+                            print(e)
+                    if imgui.button('clear close nodes display'):
+                        GraphicManager.instance.main_texture.clear_close_node_debug_circles()
                     imgui.text('选择工具')
                     imgui.text('current selected: 0')
                     mRoadGDFCluster.show_imgui_cluster_editor_button()
