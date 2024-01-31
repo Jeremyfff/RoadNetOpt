@@ -126,7 +126,7 @@ class WindowEvents(mglw.WindowConfig):
     title = "路网织补工具 V0.3 (OpenGL)"
     aspect_ratio = None
     resource_dir = os.path.abspath(g.RESOURCE_DIR)
-    vsync = False
+    vsync = True
     screen_width, screen_height = pyautogui.size()
     g.INIT_WINDOW_WIDTH = screen_width if g.INIT_WINDOW_WIDTH > screen_width else g.INIT_WINDOW_WIDTH
     g.INIT_WINDOW_HEIGHT = screen_height if g.INIT_WINDOW_HEIGHT > screen_height else g.INIT_WINDOW_HEIGHT
