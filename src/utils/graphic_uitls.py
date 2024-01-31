@@ -314,6 +314,9 @@ class GeoGL:
 
     def get_xy_lim(self):
         points = self.cached_vertices[:, :2]
+        nan_indices = np.isnan(points)
+        if np.any(nan_indices):
+            print("There are NaN values in the points array.")
         min_x = np.min(points[:, 0])
         max_x = np.max(points[:, 0])
         min_y = np.min(points[:, 1])

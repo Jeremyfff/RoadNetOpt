@@ -95,9 +95,17 @@ def imgui_select_editor_content():
         if mPinSelectEditor:
             mPinSelectEditorPos = imgui.get_window_position()
     imgui_c.tooltip('取消Pin' if mPinSelectEditor else 'Pin')
+    clicked, state = imgui.checkbox('选择道路', g.mSelectRoadsMode)
+    if clicked:
+        g.mSelectRoadsMode = state
+        common._clear_selected_roads_or_nodes_and_update_graphic()
+    clicked, state = imgui.checkbox('选择节点', not g.mSelectRoadsMode)
+    if clicked:
+        g.mSelectRoadsMode = not state
+        common._clear_selected_roads_or_nodes_and_update_graphic()
     imgui.text(f'selected roads {len(g.mSelectedRoads)}')
     if imgui.button('取消所有选择'):
-        common._clear_selected_roads_and_update_graphic()
+        common._clear_selected_roads_or_nodes_and_update_graphic()
     if imgui.button('save selected roads'):
         common.save_selected_roads()
     imgui.same_line()

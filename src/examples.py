@@ -112,42 +112,7 @@ def example_buildings_from_data():
     plt.show()
 
 
-def example_plot_to_buffer():
-    data = io_utils.load_data("../data/和县/data.bin")
-    Building.data_to_buildings(data)
-    Road.data_to_roads(data)
-    canvas, ax = init_canvas(figsize=(8, 8))
 
-    Building.plot_all(ax=ax)
-    Road.plot_all(ax=ax)
-
-    x_range = ax.get_xlim()
-    x_min = x_range[0]
-    x_max = x_range[1]
-    y_range = ax.get_ylim()
-    y_min = y_range[0]
-    y_max = y_range[1]
-
-    x_width = x_max - x_min
-    y_width = y_max - y_min
-
-    if x_width < y_width:
-        x_center = (x_min + x_max) / 2
-        x_range = (x_center - y_width / 2, x_center + y_width / 2)
-    elif x_width > y_width:
-        y_center = (y_min + y_max) / 2
-        y_range = (y_center - x_width / 2, y_center + x_width / 2)
-    ax.set_xlim(x_range)
-    ax.set_ylim(y_range)
-
-    canvas.draw()
-    # 从画布中提取图像数据为 NumPy 数组
-    image_data = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8)
-    image_data = image_data.reshape(canvas.get_width_height()[::-1] + (4,))
-    # 创建 PIL 的图像对象
-    pil_image = Image.fromarray(image_data)
-    # 显示图像
-    pil_image.show()
 
 
 def example_add_and_modify_road():

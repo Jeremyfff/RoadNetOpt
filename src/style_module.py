@@ -80,8 +80,10 @@ class StyleScheme:
 
         self.NODE_COLOR = {'DEFAULT': (0, 0, 0, 1)}
         self.NODE_SIZE = {'DEFAULT': 1.0}
-        self.HIGHLIGHTED_ROAD_COLOR = {'DEFAULT': (0, 0, 0, 1)}
+        self.HIGHLIGHTED_ROAD_COLOR = {'DEFAULT': (1, 1, 1, 1)}
         self.HIGHLIGHTED_ROAD_WIDTH_ADD = {'DEFAULT': 1.0}
+        self.HIGHLIGHTED_NODE_COLOR = {'DEFAULT': (1, 1, 1, 1)}
+        self.HIGHLIGHTED_NODE_WIDTH_ADD = {'DEFAULT': 1.0}
 
         self.DEFAULT_ROAD_STYLE_OPTION = 0
         self.DEFAULT_BUILDING_STYLE_OPTION = 0
@@ -140,6 +142,8 @@ class StyleScheme:
             "NODE_SIZE",
             "HIGHLIGHTED_ROAD_COLOR",
             "HIGHLIGHTED_ROAD_WIDTH_ADD",
+            "HIGHLIGHTED_NODE_COLOR",
+            "HIGHLIGHTED_NODE_WIDTH_ADD",
             "DEFAULT_ROAD_STYLE_OPTION",
             "DEFAULT_BUILDING_STYLE_OPTION",
             "DEFAULT_REGION_STYLE_OPTION"
@@ -209,6 +213,31 @@ class StyleScheme:
         num = len(nodes)
         width = np.full(num, self.NODE_SIZE['DEFAULT'])
         colors = np.full((num, 4), self.NODE_COLOR['DEFAULT'])
+        return colors, width
+
+    def node_idx_style_factory(self, nodes):
+        """将node idx 编码为uint32， 并转换为4个uint8，
+        其中最后一个透明通道需要始终保持为不透明状态，因此实际只有三个uint8的空间可以使用
+        为了增加颜色编码的识别度，使用以3为步长的序号编码，
+        因此最大支持的道路数量为uint24的最大表示数字 16_777_216 / 3"""
+        _ = self
+        if nodes is None: return
+        num = len(nodes)
+        assert num < 16_777_216 / 3, '达到uint24 能表达的数量上限'
+        idx_uint32 = np.arange(num, dtype=np.uint32).reshape(num, 1) * 3
+        rgb_uint8 = idx_uint32.view(np.uint8).reshape(num, 4)[:, :3]
+        rgb_float32 = rgb_uint8.astype(np.float32) / 256.0
+        alpha_float32 = np.ones((num, 1), dtype=np.float32)
+        colors = np.concatenate((rgb_float32, alpha_float32), axis=1)
+        width = np.full(num, self.NODE_SIZE['DEFAULT'])
+        return colors, width
+
+    def node_highlight_style_factory(self, nodes):
+        _ = self
+        if nodes is None: return
+        num = len(nodes)
+        colors = np.full((num, 4), self.HIGHLIGHTED_NODE_COLOR['DEFAULT'])
+        width = np.full(num, self.NODE_SIZE['DEFAULT'] + self.HIGHLIGHTED_NODE_WIDTH_ADD['DEFAULT'])
         return colors, width
 
     def building_movable_style_factory(self, buildings):
@@ -303,6 +332,7 @@ class StyleScheme:
         any_changed = False
         expanded, visible = imgui.collapsing_header(_name)
         if expanded:
+            imgui.push_id(_name)
             for key in _dict:
                 cs = _dict[key]
                 if len(cs) == 3:
@@ -314,6 +344,7 @@ class StyleScheme:
                 any_changed |= changed
                 if changed:
                     _dict[key] = cs
+            imgui.pop_id()
         return any_changed
 
     @staticmethod
@@ -347,6 +378,13 @@ class StyleScheme:
         any_changed |= StyleScheme._imgui_color_picker_template('HIGHLIGHTED_ROAD_COLOR', self.HIGHLIGHTED_ROAD_COLOR)
         any_changed |= StyleScheme._imgui_value_input_template('HIGHLIGHTED_ROAD_WIDTH_ADD',
                                                                self.HIGHLIGHTED_ROAD_WIDTH_ADD)
+        return any_changed
+
+    def show_imgui_highlighted_node_style_picker(self):
+        any_changed = False
+        any_changed |= StyleScheme._imgui_color_picker_template('HIGHLIGHTED_NODE_COLOR', self.HIGHLIGHTED_NODE_COLOR)
+        any_changed |= StyleScheme._imgui_value_input_template('HIGHLIGHTED_NODE_WIDTH_ADD',
+                                                               self.HIGHLIGHTED_NODE_WIDTH_ADD)
         return any_changed
 
     def show_imgui_building_style_by_movable_picker(self):
@@ -465,6 +503,7 @@ class StyleScheme:
                     imgui.pop_style_color()
                     region_style_changed |= self.show_imgui_region_style_by_type_picker()
                 highlight_style_changed |= self.show_imgui_highlighted_road_style_picker()
+                highlight_style_changed |= self.show_imgui_highlighted_node_style_picker()
                 node_style_changed |= self.show_imgui_node_style_picker()
                 if imgui.button('保存为默认配置'):
                     self.save_to_file(self.DEFAULT_STYLE_PATH)

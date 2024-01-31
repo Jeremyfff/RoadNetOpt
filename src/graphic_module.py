@@ -24,359 +24,6 @@ from gui.icon_module import IconManager, Spinner
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class GraphicTexture:
-    def __init__(self, name, width, height):
-        self.name = name
-        self.width = None
-        self.height = None
-        self.texture_id = None
-        self.last_update_time = None
-        self.x_lim = None
-        self.y_lim = None
-        self.exposed = True
-        self.cached_data = None
-        self.blank_img_data = None
-
-        self.update_size(width, height)
-
-    def update_size(self, width, height):
-        """更新self.width和height变量，创建空白图像，更新texture id"""
-        print(f'[update_size]update size to {width}, {height}')
-        self.width = width
-        self.height = height
-        self.blank_img_data = torch.zeros((self.height, self.width, 3), dtype=torch.uint8)
-        if self.texture_id is not None:
-            graphic_uitls.remove_texture(texture_id=self.texture_id)
-        self.texture_id = graphic_uitls.create_texture_from_array(self.blank_img_data)
-
-    def bilt_data(self, data, auto_cache=True):
-        if data is None:
-            print('data is None')
-            return
-        width = data.shape[1]
-        height = data.shape[0]
-        if width != self.width or height != self.height:
-            print(f'[bilt_data] input width {width}, self.width {self.width}')
-            print(f'[bilt_data] input height {height}, self.height {self.height}')
-            print(f'[bilt_data] bilt data过程中self.size 与input data的size不匹配')
-            self.update_size(width, height)
-            print(f'[bilt_data] self.size updated to {self.width}, {self.height}')
-        graphic_uitls.update_texture(self.texture_id, data)
-        if auto_cache:
-            self.cache_data(data)
-        self.last_update_time = datetime.now().strftime("%H-%M-%S")
-
-    def cache_data(self, data):
-        self.cached_data = data
-
-    def clear_cache(self):
-        self.cached_data = None
-
-    def plot_gdf(self, gdf, **kwargs):
-        image_data, ax = graphic_uitls.plot_as_array(gdf, self.width, self.height, y_lim=self.y_lim, **kwargs)
-        self.x_lim = ax.get_xlim()
-        self.y_lim = ax.get_ylim()
-        self.bilt_data(image_data)
-
-    def plot_by_func(self, func, **kwargs):
-        image_data, ax = graphic_uitls.plot_as_array2(func, self.width, self.height, self.y_lim, self.x_lim, **kwargs)
-        self.x_lim = ax.get_xlim()
-        self.y_lim = ax.get_ylim()
-        self.bilt_data(image_data)
-
-
-class MainGraphTexture(GraphicTexture):
-    def __init__(self, name, width, height):
-        super().__init__(name, width, height)
-        self.enable_render_roads = True
-        self.enable_render_buildings = False
-        self.enable_render_regions = False
-        self.enable_render_nodes = False
-
-        self._road_cluster = RoadCluster()
-        self._building_cluster = BuildingCluster()
-        self._region_cluster = RegionCluster()
-
-        self._any_change = False
-
-        self.cached_road_data = None
-        self.cached_node_data = None
-        self.cached_building_data = None
-        self.cached_region_data = None
-        self.cached_road_idx = None
-        self.cached_highlighted_road_data = None
-
-        self.cached_road_uid = None
-        self.cached_building_uid = None
-        self.cached_region_uid = None
-
-    def show_imgui_display_editor(self):
-        road_changed = False
-        building_changed = False
-        region_changed = False
-        # roads
-        IconManager.imgui_icon('road-fill')
-        imgui.same_line()
-        clicked, self.enable_render_roads = imgui.checkbox('render roads', True)
-        if clicked:
-            imgui.open_popup('warning')
-        if imgui.begin_popup_modal('warning',
-                                   flags=imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_ALWAYS_AUTO_RESIZE).opened:
-            size = g.mWindowSize
-            imgui.text('不能关闭道路的显示')
-            if imgui.button('知道了', width=size.x - 16, height=22):
-                imgui.close_current_popup()
-            imgui.end_popup()
-        if self.enable_render_roads:
-            imgui.indent()
-            road_changed |= self._road_cluster.show_imgui_cluster_editor_button()
-            imgui.unindent()
-        # buildings
-        IconManager.imgui_icon('building-fill')
-        imgui.same_line()
-        clicked, self.enable_render_buildings = imgui.checkbox('render buildings', self.enable_render_buildings)
-        if clicked:
-            self._any_change = True
-        if self.enable_render_buildings:
-            imgui.indent()
-            building_changed |= self._building_cluster.show_imgui_cluster_editor_button()
-            imgui.unindent()
-        # regions
-        IconManager.imgui_icon('polygon')
-        imgui.same_line()
-        clicked, self.enable_render_regions = imgui.checkbox('render regions', self.enable_render_regions)
-        if clicked:
-            self._any_change = True
-        if self.enable_render_regions:
-            imgui.indent()
-            region_changed |= self._region_cluster.show_imgui_cluster_editor_button()
-            imgui.unindent()
-
-        # nodes
-        IconManager.imgui_icon('vector-polygon')
-        imgui.same_line()
-        clicked, self.enable_render_nodes = imgui.checkbox('render nodes', self.enable_render_nodes)
-        if clicked:
-            self._any_change = True
-
-        if road_changed:
-            self.clear_road_data()
-        if building_changed:
-            self.clear_building_data()
-        if region_changed:
-            self.clear_region_data()
-
-    def plot_gdf(self, gdf, **kwargs):
-        logging.warning('main graph texture dose not support plot gdf')
-
-    def _in_regions(self, pos):
-        return 0 <= pos[0] < self.width and 0 <= pos[1] < self.height
-
-    def _wrapped_plot_as_array2(self, plot_func, **kwargs):
-        """
-        自动提供的参数有： width, height, y_lim, transparent, antialiased, ax
-        需要提供的参数有：plot_func
-        可提供的参数有：x_lim
-        其他可以提供的参数有：plot_func绘图需要的参数,其中ax会自动提供给plot_func
-        """
-        img_data, ax = graphic_uitls.plot_as_array2(plot_func=plot_func,
-                                                    width=self.width,
-                                                    height=self.height,
-                                                    y_lim=self.y_lim,
-                                                    transparent=True,
-                                                    antialiased=False,
-                                                    **kwargs
-                                                    )
-        return img_data, ax
-
-    def _render_roads(self):
-        if self.cached_road_data is None or self.cached_road_uid != Road.uid():
-            img_data, ax = self._wrapped_plot_as_array2(Road.plot_using_style_factory,
-                                                        x_lim=self.x_lim,
-                                                        roads=Road.get_roads_by_cluster(self._road_cluster),
-                                                        style_factory=sm.I.dis.get_current_road_style_factory())
-            if self.x_lim is None:
-                # 只有在第一次的时候才更新
-                self.x_lim = ax.get_xlim()
-                self.y_lim = ax.get_ylim()
-            self.cached_road_data = img_data
-            self.cached_road_uid = Road.uid()
-            self._any_change = True
-            self.cached_road_idx = None
-            self.cached_node_data = None
-        else:
-            img_data = self.cached_road_data
-        return img_data
-
-    def _render_buildings(self):
-        if self.cached_building_data is None or self.cached_building_uid != Building.uid():
-            img_data, ax = self._wrapped_plot_as_array2(Building.plot_patch_using_style_factory,
-                                                        x_lim=self.x_lim,
-                                                        buildings=Building.get_buildings_by_cluster(
-                                                            self._building_cluster),
-                                                        style_factory=sm.I.dis.get_current_building_style_factory())
-            self.cached_building_data = img_data
-            self.cached_building_uid = Building.uid()
-            self._any_change = True
-        else:
-            img_data = self.cached_building_data
-        return img_data
-
-    def _render_regions(self):
-        if self.cached_region_data is None or self.cached_region_uid != Region.uid():
-            img_data, ax = self._wrapped_plot_as_array2(Region.plot_using_style_factory,
-                                                        x_lim=self.x_lim,
-                                                        regions=Region.get_regions_by_cluster(self._region_cluster),
-                                                        style_factory=sm.I.dis.get_current_region_style_factory())
-            self.cached_region_data = img_data
-            self.cached_region_uid = Region.uid()
-            self._any_change = True
-        else:
-            img_data = self.cached_region_data
-        return img_data
-
-    def _render_road_idx(self):
-        if self.cached_road_idx is None:
-            print(f'[_render_road_idx] render road idx')
-            idx_img_data, _ = self._wrapped_plot_as_array2(Road.plot_using_idx,
-                                                           x_lim=self.x_lim,
-                                                           roads=Road.get_all_roads())
-            self.cached_road_idx = idx_img_data
-        else:
-            idx_img_data = self.cached_road_idx
-        return idx_img_data
-
-    def _render_highlighted_road(self, roads_dict):
-
-        if self.cached_highlighted_road_data is None:
-            print(f'[_render_highlighted_road] render highlighted road')
-            keys = roads_dict.keys()
-            if len(keys) > 0:
-                if len(keys) == 1:
-                    roads = list(roads_dict.values())[0]
-                    roads = roads.to_frame().T
-                else:
-                    roads = [road.to_frame().T for road in list(roads_dict.values())]
-                    roads = gpd.pd.concat(roads, ignore_index=False)
-                img_data, ax = self._wrapped_plot_as_array2(Road.plot_roads,
-                                                            x_lim=self.x_lim,
-                                                            roads=roads,
-                                                            linewidth=5,
-                                                            colors=(0.8, 1, 1, 0.8))
-
-            else:
-                img_data = torch.zeros((self.height, self.width, 4), dtype=torch.uint8)
-            self.cached_highlighted_road_data = img_data
-            self._any_change = True
-        else:
-            img_data = self.cached_highlighted_road_data
-        return img_data
-
-    def _render_nodes(self):
-        if self.cached_node_data is None:
-            img_data, ax = self._wrapped_plot_as_array2(Road.plot_nodes,
-                                                        x_lim=self.x_lim,
-                                                        nodes=Road.get_all_nodes(),
-                                                        )
-            self.cached_node_data = img_data
-            self._any_change = True
-            return img_data
-        else:
-            return self.cached_node_data
-
-    def get_road_idx_by_mouse_pos(self, mouse_pos) -> Union[int, None]:
-        if not self._in_regions(mouse_pos) or not self.enable_render_roads:
-            return None
-        idx_img_data = self._render_road_idx()
-        pointer_color = idx_img_data[mouse_pos[1], mouse_pos[0]].cpu().numpy()
-        idx = common_utils.rgb_to_id(pointer_color)
-        on_road = pointer_color[3].item() != 0
-        if not on_road:
-            return None
-        # print(f'id = {idx}, color = {pointer_color}')
-        return idx
-
-    def update(self, **kwargs):
-        if Road.get_all_roads().empty:
-            return
-        target_size = kwargs['target_size']
-        selected_roads = kwargs['selected_roads']
-        target_width, target_height = target_size[0], target_size[1]
-        if target_width != self.width or target_height != self.height:
-            self.update_size(target_width, target_height)
-            self.clear_cache()
-            print(f'[update] target size changed to {target_width}, {target_height}')
-            print(f'[update] self.size updated to {self.width}, {self.height}')
-            print(f'[update] return')
-            return
-
-        if self.enable_render_roads:
-            road_data = self._render_roads()
-            highlight_data = self._render_highlighted_road(selected_roads)
-        else:
-            road_data = self.blank_img_data
-            highlight_data = self.blank_img_data
-
-        if self.enable_render_buildings:
-            building_data = self._render_buildings()
-        else:
-            building_data = self.blank_img_data
-
-        if self.enable_render_regions:
-            region_data = self._render_regions()
-        else:
-            region_data = self.blank_img_data
-
-        if self.enable_render_nodes:
-            node_data = self._render_nodes()
-        else:
-            node_data = self.blank_img_data
-
-        if self._any_change:
-            print('[update] new change detected')
-            blended = graphic_uitls.blend_img_data(region_data, building_data)
-            blended = graphic_uitls.blend_img_data(blended, road_data)
-            blended = graphic_uitls.blend_img_data(blended, highlight_data)
-            if self.enable_render_nodes:
-                blended = graphic_uitls.blend_img_data(blended, node_data)
-            self.bilt_data(blended, auto_cache=False)
-
-        self._any_change = False  # reset to False
-
-    def clear_cache(self):
-        self.cached_data = None
-        self.cached_road_data = None
-        self.cached_road_idx = None
-        self.cached_highlighted_road_data = None
-        self.cached_building_data = None
-        self.cached_region_data = None
-        self.x_lim = None
-        self.y_lim = None
-
-    def clear_highlight_data(self):
-        self.cached_highlighted_road_data = None
-
-    def clear_road_data(self):
-        """适用于road的颜色、显示等发生改变时"""
-        self.cached_road_data = None
-
-    def clear_road_data_deep(self):
-        """适用于road的文件结构改变时"""
-        self.cached_road_data = None
-        self.cached_road_idx = None
-        self.cached_highlighted_road_data = None
-
-    def clear_building_data(self):
-        self.cached_building_data = None
-
-    def clear_region_data(self):
-        self.cached_region_data = None
-
-    def clear_x_y_lim(self):
-        self.x_lim = None
-        self.y_lim = None
-
-
 class SimpleTexture:
     def __init__(self, name, width, height, channel=4):
         self.name = name
@@ -470,7 +117,9 @@ class MainFrameBufferTexture(FrameBufferTexture):
         self._need_check_regions = True
         self._need_check_nodes = True
         self._need_check_highlighted_roads = True
+        self._need_check_highlighted_nodes = True
         self._need_check_road_idx = True
+        self._need_check_node_idx = True
 
         # caches
         self.cached_road_uid = None
@@ -482,23 +131,29 @@ class MainFrameBufferTexture(FrameBufferTexture):
         _bsf = sm.I.dis.get_current_building_style_factory()
         _resf = sm.I.dis.get_current_region_style_factory()
         _nsf = sm.I.dis.node_style_factory
-        _hsf = sm.I.dis.road_highlight_style_factory
+        _rhsf = sm.I.dis.road_highlight_style_factory
+        _nhsf = sm.I.dis.node_highlight_style_factory
 
         self.road_gl = graphic_uitls.RoadGL('road', _rsf)
         self.building_gl = graphic_uitls.BuildingGL('building', _bsf)
         self.region_gl = graphic_uitls.RegionGL('region', _resf)
         self.node_gl = graphic_uitls.NodeGL('node', _nsf)
-        self.highlighted_road_gl = graphic_uitls.RoadGL('highlighted_road', _hsf)
+        self.highlighted_road_gl = graphic_uitls.RoadGL('highlighted_road', _rhsf)
+        self.highlighted_node_gl = graphic_uitls.NodeGL('highlighted_node', _nhsf)
         self.pointer_gl = graphic_uitls.PointerGL()
         self.rect_gl = graphic_uitls.RectGL('drag_selection')
 
         self._road_idx_texture = RoadIdxFrameBufferTexture('road_idx', self.width, self.height)
+        self._node_idx_texture = NodeIdxFrameBufferTexture('road_idx', self.width, self.height)
 
         # imgui draw list
         self._close_node_debug_circles: list[graphic_uitls.ImguiCircleWorldSpace] = []
         self._close_node_debug_texts: list[graphic_uitls.ImguiTextWorldSpace] = []
+        self._intersection_debug_circles: list[graphic_uitls.ImguiCircleWorldSpace] = []
+        self._intersection_debug_texts: list[graphic_uitls.ImguiTextWorldSpace] = []
+
         self._drag_selection_start_pos = None
-        self._cached_road_idx_img_arr = None
+        self._cached_road_or_node_idx_img_arr = None
 
     def show_imgui_display_editor(self):
         road_changed = False
@@ -586,6 +241,7 @@ class MainFrameBufferTexture(FrameBufferTexture):
                 # 当road结构发生变化时，将相关变量设为需要检查
                 self._need_check_nodes = True
                 self._need_check_road_idx = True
+                self._need_check_node_idx = True
 
             self.cached_road_uid = Road.uid()
             self._need_check_roads = False
@@ -643,6 +299,28 @@ class MainFrameBufferTexture(FrameBufferTexture):
         else:
             return False
 
+    def _check_highlighted_nodes(self):
+        if self._need_check_highlighted_nodes:
+            nodes_dict = g.mSelectedNodes
+            keys = nodes_dict.keys()
+            if len(keys) == 0:
+                nodes = None
+            elif len(keys) == 1:
+                nodes = list(nodes_dict.values())[0]
+                nodes = nodes.to_frame().T
+            else:
+                nodes = [node.to_frame().T for node in list(nodes_dict.values())]
+                nodes = gpd.pd.concat(nodes, ignore_index=False)
+
+            self.highlighted_node_gl.set_gdf(nodes)
+            self.highlighted_node_gl.update_buffer()
+
+            self._need_check_highlighted_nodes = False
+            self._any_change = True
+            return True
+        else:
+            return False
+
     def _check_road_idx(self):
         if self._need_check_road_idx:
             self._road_idx_texture.road_idx_gl.set_gdf(Road.get_roads_by_cluster(self.road_cluster))
@@ -651,6 +329,13 @@ class MainFrameBufferTexture(FrameBufferTexture):
             self._any_change = True
         else:
             return False
+
+    def _check_node_idx(self):
+        if self._need_check_node_idx:
+            self._node_idx_texture.node_idx_gl.set_gdf(Road.get_all_nodes())
+            self._node_idx_texture.node_idx_gl.update_buffer()
+            self._need_check_node_idx = False
+            self._any_change = True
 
     def _check_nodes(self):
         if self._need_check_nodes:
@@ -677,10 +362,23 @@ class MainFrameBufferTexture(FrameBufferTexture):
             (texture.height, texture.width, 4))
         return img_uint8
 
-    def get_road_idx_by_mouse_pos(self, texture_space_mouse_pos) -> Union[int, None]:
+    def _render_and_get_node_idx_uint8_img_arr(self):
+        self._node_idx_texture.fbo.use()
+        self._node_idx_texture.fbo.clear(1, 1, 1, 0)  # 前三个通道表示id， alpha通道表示是否有道路
+        self._node_idx_texture.node_idx_gl.update_prog(self.x_lim, self.y_lim)
+        self._node_idx_texture.node_idx_gl.render()
+        texture = self._node_idx_texture.texture
+        img_uint8 = np.frombuffer(self._node_idx_texture.fbo.color_attachments[0].read(), dtype=np.uint8).reshape(
+            (texture.height, texture.width, 4))
+        return img_uint8
+
+    def get_road_or_node_idx_by_mouse_pos(self, texture_space_mouse_pos, select_roads=True) -> Union[int, None]:
         if not self._in_regions(texture_space_mouse_pos): return None
         if self.x_lim is None or self.y_lim is None: return None
-        img_uint8 = self._render_and_get_road_idx_uint8_img_arr()
+        if select_roads:
+            img_uint8 = self._render_and_get_road_idx_uint8_img_arr()
+        else:
+            img_uint8 = self._render_and_get_node_idx_uint8_img_arr()
         color_uint8 = img_uint8[texture_space_mouse_pos[1], texture_space_mouse_pos[0], :]
         if color_uint8[3] == 0: return None  # click on blank
         color_uint8 = color_uint8.copy()
@@ -690,21 +388,24 @@ class MainFrameBufferTexture(FrameBufferTexture):
         idx_int = int(np.round(idx_float)[0])
         return idx_int
 
-    def start_drag_selection(self, texture_space_mouse_pos):
+    def start_drag_selection(self, texture_space_mouse_pos, select_roads=True):
         if not self._in_regions(texture_space_mouse_pos): return
         if self.x_lim is None or self.y_lim is None: return
         self._drag_selection_start_pos = texture_space_mouse_pos
-        self._cached_road_idx_img_arr = self._render_and_get_road_idx_uint8_img_arr()
+        if select_roads:
+            self._cached_road_or_node_idx_img_arr = self._render_and_get_road_idx_uint8_img_arr()
+        else:
+            self._cached_road_or_node_idx_img_arr = self._render_and_get_node_idx_uint8_img_arr()
         self._any_change = True
 
     def update_drag_selection(self, texture_space_mouse_pos):
-        if self._drag_selection_start_pos is None or self._cached_road_idx_img_arr is None:
+        if self._drag_selection_start_pos is None or self._cached_road_or_node_idx_img_arr is None:
             return None
         x_min = min(texture_space_mouse_pos[0], self._drag_selection_start_pos[0])
         x_max = max(texture_space_mouse_pos[0], self._drag_selection_start_pos[0])
         y_min = min(texture_space_mouse_pos[1], self._drag_selection_start_pos[1])
         y_max = max(texture_space_mouse_pos[1], self._drag_selection_start_pos[1])
-        img_arr_slice = self._cached_road_idx_img_arr[y_min:y_max, x_min:x_max, :].reshape(-1, 4)
+        img_arr_slice = self._cached_road_or_node_idx_img_arr[y_min:y_max, x_min:x_max, :].reshape(-1, 4)
         img_arr_slice = img_arr_slice[img_arr_slice[:, 3] != 0]
         arr_uint8 = np.unique(img_arr_slice, axis=0)
         arr_uint8[:, 3] = 0
@@ -716,7 +417,7 @@ class MainFrameBufferTexture(FrameBufferTexture):
 
     def end_drag_selection(self):
         self._drag_selection_start_pos = None
-        self._cached_road_idx_img_arr = None
+        self._cached_road_or_node_idx_img_arr = None
         self._any_change = True
 
     def clear_cache(self):
@@ -730,10 +431,13 @@ class MainFrameBufferTexture(FrameBufferTexture):
         self._need_check_regions = True
         self._need_check_nodes = True
         self._need_check_road_idx = True
+        self._need_check_node_idx = True
         self._need_check_highlighted_roads = True
+        self._need_check_highlighted_nodes = True
 
     def clear_highlight_data(self):
         self._need_check_highlighted_roads = True
+        self._need_check_highlighted_nodes = True
 
     def clear_road_data(self):
         """适用于road的颜色、显示等发生改变时"""
@@ -743,7 +447,9 @@ class MainFrameBufferTexture(FrameBufferTexture):
         """适用于road的文件结构改变时"""
         self._need_check_roads = True
         self._need_check_road_idx = True
+        self._need_check_node_idx = True
         self._need_check_highlighted_roads = True
+        self._need_check_highlighted_nodes = True
 
     def clear_building_data(self):
         self._need_check_buildings = True
@@ -840,6 +546,20 @@ class MainFrameBufferTexture(FrameBufferTexture):
         self._close_node_debug_circles = []
         self._close_node_debug_texts = []
 
+    def add_intersection_debug_circle(self, world_x, world_y, screen_radius, tuple_color, content):
+        circle = graphic_uitls.ImguiCircleWorldSpace(world_x, world_y,
+                                                     screen_radius, tuple_color,
+                                                     g.mImageWindowDrawList, self)
+        text = graphic_uitls.ImguiTextWorldSpace(world_x, world_y,
+                                                 content, tuple_color,
+                                                 g.mImageWindowDrawList, self)
+        self._intersection_debug_circles.append(circle)
+        self._intersection_debug_texts.append(text)
+
+    def clear_intersection_debug_circles(self):
+        self._intersection_debug_circles = []
+        self._intersection_debug_texts = []
+
     def render(self, **kwargs):
         """被调用即进行渲染，不进行逻辑判断"""
         self.fbo.use()
@@ -860,6 +580,8 @@ class MainFrameBufferTexture(FrameBufferTexture):
         if self.enable_render_nodes:
             self.node_gl.update_prog(self.x_lim, self.y_lim)
             self.node_gl.render()
+            self.highlighted_node_gl.update_prog(self.x_lim, self.y_lim)
+            self.highlighted_node_gl.render()
         if self.enable_mouse_pointer:
             self.pointer_gl.update_prog(offset=self.mouse_pos_percent, texture_size=self.texture.size)
             self.pointer_gl.render()
@@ -879,6 +601,7 @@ class MainFrameBufferTexture(FrameBufferTexture):
         if width != self.width or height != self.height:
             self.update_size(width, height)
             self._road_idx_texture.update_size(width, height)
+            self._node_idx_texture.update_size(width, height)
             self.clear_x_y_lim()
             self._any_change = True
 
@@ -886,12 +609,14 @@ class MainFrameBufferTexture(FrameBufferTexture):
             self._check_roads()
             self._check_highlighted_roads()
             self._check_road_idx()
+            self._check_node_idx()
         if self.enable_render_buildings:
             self._check_buildings()
         if self.enable_render_regions:
             self._check_regions()
         if self.enable_render_nodes:
             self._check_nodes()
+            self._check_highlighted_nodes()
 
         if self._any_change or self.enable_mouse_pointer or not self._lazy_update:
             self.render(**kwargs)
@@ -900,23 +625,30 @@ class MainFrameBufferTexture(FrameBufferTexture):
     def render_draw_list(self):
         if self.x_lim is None or self.y_lim is None:
             return
-        # x, y = self.mouse_pos_percent
-        # y = 1 - y
-        # world_x = x * self.world_space_width + self.x_lim[0]
-        # world_y = y * self.world_space_height + self.y_lim[0]
-        # circle = graphic_uitls.ImguiCircleWorldSpace(world_x, world_y, 10, (1,1,1,1), g.mImageWindowDrawList, self)
-        # circle.draw()
         if self._close_node_debug_circles:
             for circle in self._close_node_debug_circles:
                 circle.draw()
         if self._close_node_debug_texts:
             for text in self._close_node_debug_texts:
                 text.draw()
+        if self._intersection_debug_circles:
+            for circle in self._intersection_debug_circles:
+                circle.draw()
+        if self._intersection_debug_texts:
+            for text in self._intersection_debug_texts:
+                text.draw()
+
 
 class RoadIdxFrameBufferTexture(FrameBufferTexture):
     def __init__(self, name, width, height):
         super().__init__(name, width, height)
-        self.road_idx_gl = graphic_uitls.RoadGL('raod_idx', sm.I.dis.road_idx_style_factory)
+        self.road_idx_gl = graphic_uitls.RoadGL('road_idx', sm.I.dis.road_idx_style_factory)
+
+
+class NodeIdxFrameBufferTexture(FrameBufferTexture):
+    def __init__(self, name, width, height):
+        super().__init__(name, width, height)
+        self.node_idx_gl = graphic_uitls.NodeGL('node_idx', sm.I.dis.node_idx_style_factory)
 
 
 class AgentFrameBufferTexture(FrameBufferTexture):

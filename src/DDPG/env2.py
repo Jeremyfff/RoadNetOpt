@@ -53,9 +53,9 @@ class RoadNet:
             if random_road['uid'] in selected_road_uids: continue  # 如果随机到的路已经被选中了，则重新选
             if random_road['uid'] not in Road.get_all_roads()['uid'].values: continue
             selected_road_uids.add(random_road['uid'])  # 将随机到的路加入已被选择的路的set
-            spawn_point = Road.split_road_by_random_position(random_road)  # 在路上随机一个点并尝试分裂
+            spawn_point = Road.interpolate_road_by_random_position(random_road)
             if spawn_point is None: continue  # 如果找不到符合路网间距规范的点，则重新选一条路
-
+            Road.split_road_by_coord(random_road, spawn_point)  # 在路上随机一个点并尝试分裂
             uid = Road.add_road_by_coords(spawn_point, RoadLevel.TERTIARY, RoadState.OPTIMIZING)  # 生成新路
             new_road = Road.get_road_by_uid(uid)
 

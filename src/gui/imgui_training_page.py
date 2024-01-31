@@ -147,7 +147,7 @@ def show():
                         g.mCurrentEditingRoad = new_road
                         g.mAddNodeMode = True
                         mSelectStartPointMode = False
-                        common._clear_selected_roads_and_update_graphic()
+                        common._clear_selected_roads_or_nodes_and_update_graphic()
                     if imgui.button('取消'):
                         mSelectStartPointMode = False
                 except Exception as e:
@@ -169,7 +169,7 @@ def show():
                         road = list(g.mSelectedRoads.values())[0]
                         g.mAddNodeMode = True
                         g.mCurrentEditingRoad = road
-                        common._clear_selected_roads_and_update_graphic()
+                        common._clear_selected_roads_or_nodes_and_update_graphic()
                     except Exception as e:
                         print(str(e))
 

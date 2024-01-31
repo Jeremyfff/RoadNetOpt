@@ -1,4 +1,5 @@
 import ctypes
+import logging
 import time
 import swifter
 import traceback
@@ -15,7 +16,7 @@ from geo import Object
 from utils.common_utils import timer
 from utils.point_utils import xywh2points
 from utils import BuildingMovableType, BuildingStyle, BuildingQuality, BuildingCluster
-from lib.accelerator import cAccelerator
+from lib.accelerator import cAccelerator, arrs_addr_len
 import style_module
 from gui import global_var as g
 
@@ -249,41 +250,42 @@ class Building(Object):
 
     @staticmethod
     @timer
-    def get_vertices_data(buildings, style_factory, debug=False):
+    def get_vertices_data(buildings, style_factory):
+        # time logger
         start_time = time.time()
-        params = style_factory(buildings)
-        colors = params[0]
-        num_buildings = len(buildings)
-        first = np.empty(num_buildings, dtype=np.int32)
-        num_vertices = np.empty(num_buildings, dtype=np.int32)
-        vertex_coords = buildings['coords']
-        i = 0
-        total = 0
-        for coords in vertex_coords:
-            num = len(coords)
-            first[i] = total
-            num_vertices[i] = num
-            total += num
-            i += 1
-        vertex_coords = np.concatenate(vertex_coords.values, axis=0)
-        vertex_coords = np.array(vertex_coords, dtype=np.float32).tobytes()  # 4 + 4 bytes
-        first = np.array(first, dtype=np.int32).tobytes()  # 4 byte
-        num_vertices = np.array(num_vertices, dtype=np.int32).tobytes()  # 4 bytes
-        colors = np.array(colors, dtype=np.float32)
+        # colors and width
+        params = style_factory(buildings)  # tuple( colors and widths)
+        colors = np.array(params[0], dtype=np.float32)  # float32
         if colors.shape[1] == 3:
             colors = np.concatenate((colors, np.ones((len(colors), 1), dtype=np.float32)), axis=1)
-        colors = colors.tobytes()  # 4 + 4 + 4 + 4  bytes
-        if debug:
-            print(f'prepare bytes 消耗时间 = {time.time() - start_time}s')
-            start_time = time.time()
-        buffer = cAccelerator.TriangulatePolygons(vertex_coords, first, num_vertices, colors)
-        if debug:
-            print(f'c# 代码消耗时间 = {time.time() - start_time}s')
-            start_time = time.time()
-        py_bytes = bytes(buffer)
-        vertices = np.frombuffer(py_bytes, np.float32).reshape(-1, 6)
-        if debug:
-            print(f'转换为numpy消耗时间 = {time.time() - start_time}s')
+        in_r, in_g, in_b, in_a = colors[:, 0].copy(), colors[:, 1].copy(), colors[:, 2].copy(), colors[:, 3].copy()
+
+        # coords, first and num
+        vertex_coords = buildings['coords']  # pandas
+        in_first = np.concatenate(([0], np.cumsum(vertex_coords.apply(len).to_numpy()[:-1])), dtype=np.int32)  # int32
+        in_num = vertex_coords.apply(len).to_numpy().astype(np.int32)  # int32
+        vertex_coords = np.concatenate(vertex_coords.values, axis=0).astype(np.float32)  # (n, 2) float32
+        in_x, in_y = vertex_coords[:, 0].copy(), vertex_coords[:, 1].copy()
+
+        # time logger
+        logging.debug(f'prepare bytes 消耗时间 = {time.time() - start_time}s')
+        start_time = time.time()
+
+        # c# code
+        c_params = arrs_addr_len(in_x, in_y, in_first, in_num, in_r, in_g, in_b, in_a)
+        buffer = cAccelerator.TriangulatePolygons(*c_params)
+
+        # time logger
+        logging.debug(f'c# 代码消耗时间（含数据传输） = {time.time() - start_time}s')
+        start_time = time.time()
+
+        # convert to numpy
+        vertices = np.frombuffer(bytes(buffer), np.float32).reshape(-1, 6)
+        if np.any(np.isnan(vertices)):
+            logging.warning("There are NaN values in the vertices array.")
+
+        # time logger
+        logging.debug(f'转换为numpy消耗时间 = {time.time() - start_time}s')
         return vertices
 
     # endregion

@@ -4,7 +4,6 @@ D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerat
 D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\RoadNetOptAccelerator\obj\Debug\RoadNetOptAccelerator.csproj.CoreCompileInputs.cache
 D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\RoadNetOptAccelerator\obj\Debug\RoadNetOptAccelerator.dll
 D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\RoadNetOptAccelerator\obj\Debug\RoadNetOptAccelerator.pdb
-D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\RoadNetOptAccelerator.xml
 D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\RoadNetOptAccelerator.dll
 D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\RoadNetOptAccelerator.pdb
 D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\obj\Debug\RoadNetOptAccelerator.csproj.AssemblyReference.cache
@@ -135,3 +134,17 @@ D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerat
 D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\UnityEngine.InputModule.pdb
 D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\obj\Debug\RoadNetOptAccelerator.csproj.CopyComplete
 D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\Poly2Tri.dll
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\RoadNetOptAccelerator.dll.config
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\NetTopologySuite.dll
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\System.Buffers.dll
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\System.Memory.dll
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\System.Numerics.Vectors.dll
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\System.Runtime.CompilerServices.Unsafe.dll
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\NetTopologySuite.xml
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\System.Buffers.xml
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\System.Memory.xml
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\System.Numerics.Vectors.xml
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\System.Runtime.CompilerServices.Unsafe.xml
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\cimgui.dll
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\ImGui.NET.dll
+D:\M.Arch\2024Spr\RoadNetworkOptimization\RoadNetOpt\src\lib\RoadNetOptAccelerator\bin\Debug\ImGui.NET.xml

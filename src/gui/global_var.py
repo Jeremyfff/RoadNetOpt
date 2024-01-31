@@ -3,7 +3,7 @@ import os
 import moderngl
 import moderngl_window.integrations.imgui
 
-GLOBAL_SCALE = 1.0
+GLOBAL_SCALE = 1.25
 DARK_MODE = True
 INIT_WINDOW_WIDTH = 1280 * GLOBAL_SCALE
 INIT_WINDOW_HEIGHT = 720 * GLOBAL_SCALE
@@ -56,7 +56,9 @@ mImageWindowInnerSize = (0, 0)  # 图像控件的大小（屏幕空间
 mImageWindowInnerPos = (0, 0)  # 图片控件在窗口的绝对位置（屏幕空间
 mImageWindowDrawList = None
 
+mSelectRoadsMode = True
 mSelectedRoads = {}  # 被选中的道路 dict{uid:road}
+mSelectedNodes = {}
 mCurrentEditingRoad = None
 mAddNodeMode = False
 

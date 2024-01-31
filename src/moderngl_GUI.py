@@ -3,9 +3,9 @@ import sys
 from PyQt5.QtWidgets import QSplashScreen, QApplication
 from PyQt5.QtGui import QPixmap, QFont, QPainter, QColor
 from PyQt5.QtCore import Qt
-import ctypes
+# import ctypes
 
-ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
+# ctypes.windll.user32.SetProcessDPIAware()  # 禁用dpi缩放
 
 """
 * Powered by DearImGui
@@ -123,10 +123,10 @@ imgui_debug_subwindow.set_debug_content(imgui_debug_subwindow_content)
 
 class WindowEvents(mglw.WindowConfig):
     gl_version = (3, 3)
-    title = "路网织补工具 V0.2 (Powered by ModernGL)"
+    title = "路网织补工具 V0.3 (OpenGL)"
     aspect_ratio = None
     resource_dir = os.path.abspath(g.RESOURCE_DIR)
-    vsync = True
+    vsync = False
     screen_width, screen_height = pyautogui.size()
     g.INIT_WINDOW_WIDTH = screen_width if g.INIT_WINDOW_WIDTH > screen_width else g.INIT_WINDOW_WIDTH
     g.INIT_WINDOW_HEIGHT = screen_height if g.INIT_WINDOW_HEIGHT > screen_height else g.INIT_WINDOW_HEIGHT

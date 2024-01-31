@@ -67,7 +67,9 @@ class RoadNet:
         # print(road)
         distance = distance_array[index]
         # print(distance)
-        point = Road.split_road(road, distance, normalized=False, update_nodes_immediately=True)
+        point = Road.interpolate_road(road, distance, normalized=False)
+        assert point is not None
+        Road.split_road_by_coord(road, point)
         return point
 
     def reset(self):
@@ -316,7 +318,7 @@ class RoadNet:
                 uid = split[0]
                 distance_normalized = split[1]
                 road = Road.get_road_by_uid(uid)
-                Road.split_road(road, distance_normalized, normalized=True, update_nodes_immediately=True)
+                Road.split_road(road, distance_normalized, normalized=True)
 
 
 # if __name__ == '__main__':
