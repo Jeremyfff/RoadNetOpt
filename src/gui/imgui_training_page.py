@@ -128,8 +128,8 @@ def show():
                     screen_point_local = \
                         graphic_uitls.world_space_to_image_space(cut_point_tuple[0],
                                                                  cut_point_tuple[1],
-                                                                 GraphicManager.instance.main_texture.x_lim,
-                                                                 GraphicManager.instance.main_texture.y_lim,
+                                                                 GraphicManager.I.MainTexture.x_lim,
+                                                                 GraphicManager.I.MainTexture.y_lim,
                                                                  g.mImageWindowInnerSize[0],
                                                                  g.mImageWindowInnerSize[1])
                     screen_point = (screen_point_local[0] + g.mImageWindowInnerPos[0],
@@ -147,7 +147,7 @@ def show():
                         g.mCurrentEditingRoad = new_road
                         g.mAddNodeMode = True
                         mSelectStartPointMode = False
-                        common._clear_selected_roads_or_nodes_and_update_graphic()
+                        common.clear_selected_roads_or_nodes_and_update_graphic()
                     if imgui.button('取消'):
                         mSelectStartPointMode = False
                 except Exception as e:
@@ -169,7 +169,7 @@ def show():
                         road = list(g.mSelectedRoads.values())[0]
                         g.mAddNodeMode = True
                         g.mCurrentEditingRoad = road
-                        common._clear_selected_roads_or_nodes_and_update_graphic()
+                        common.clear_selected_roads_or_nodes_and_update_graphic()
                     except Exception as e:
                         print(str(e))
 
@@ -235,7 +235,7 @@ def road_grow_animation_reset_func():
         except:
             pass
     mNewRoads = {}
-    GraphicManager.instance.main_texture.clear_road_data_deep()
+    GraphicManager.I.MainTexture.clear_road_data_deep()
 
 
 def road_grow_animation_body_func(step: int) -> bool:
@@ -257,7 +257,7 @@ def road_grow_animation_body_func(step: int) -> bool:
             else:
                 mNewRoads[i] = Road.add_point_to_road(mNewRoads[i], pt)
             count += 1
-        GraphicManager.instance.main_texture.clear_road_data_deep()
+        GraphicManager.I.MainTexture.clear_road_data_deep()
         if count == 0:
             return True
         return False

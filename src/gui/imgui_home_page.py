@@ -2,6 +2,7 @@ import imgui
 import sys
 
 from gui import global_var as g
+from gui import global_info as gi
 from gui import components as imgui_c
 
 print('home page loaded')
@@ -9,9 +10,11 @@ def show():
     imgui.push_id('home_page')
     imgui.indent()
     imgui.text('')
-    imgui.text_wrapped("交互式街区路网织补工具")
-    imgui.text('Version:2024.1.31')
-    imgui.text('工具作者：冯以恒， 武文忻， 邱淑冰')
+    imgui.text_wrapped(gi.PRODUCT_NAME)
+    imgui.text(f'Version:{gi.RELEASE_VERSION} {gi.LAST_MODIFIED}')
+    imgui.text(f'工具作者：{", ".join(gi.AUTHOR)}')
+    imgui.text('项目地址: ')
+    imgui.text_colored('https://github.com/Jeremyfff/RoadNetOpt', 0.19, 0.53, 0.92, 1.0)
     imgui.text('')
     imgui.separator()
 
@@ -35,6 +38,10 @@ def show():
     imgui.text('    - 图层设置')
     imgui.text('    - 样式设置')
     imgui.text('    - 选择设置')
+    imgui.text('    - 图像信息')
     imgui.text('    - 图形设置')
+
+    imgui.text('')
+
     imgui.unindent()
     imgui.pop_id()

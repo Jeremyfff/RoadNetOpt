@@ -3,6 +3,7 @@ from typing import Union, TypeVar, Callable, Any
 
 import imgui
 import matplotlib
+import moderngl_window
 import numpy as np
 from OpenGL.GL import *
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -138,7 +139,7 @@ def image_space_to_world_space(image_x, image_y, x_lim, y_lim, image_width, imag
 
 
 def image_space_to_image_window_space(image_x, image_y):
-    window_x = g.TEXTURE_SCALE * image_x + g.IMAGE_WINDOW_INDENT_LEFT
+    window_x = g.TEXTURE_SCALE * image_x + g.IMAGE_WINDOW_INDENT_LEFT + g.LEFT_WINDOW_WIDTH
     window_y = g.TEXTURE_SCALE * image_y + g.IMAGE_WINDOW_INDENT_TOP
     return window_x, window_y
 
@@ -231,8 +232,10 @@ class ImguiDrawListObject:
     add_polyline(self, list points, ImU32 col, ImDrawFlags flags=0, float thickness=1.0)
     add_quad(self, float point1_x, float point1_y, float point2_x, float point2_y, float point3_x, float point3_y, float point4_x, float point4_y, ImU32 col, float thickness=1.0)
     add_rect(self, float upper_left_x, float upper_left_y, float lower_right_x, float lower_right_y, ImU32 col, float rounding=0.0, ImDrawFlags flags=0, float thickness=1.0)
+    add_rect_filled(self, float upper_left_x, float upper_left_y, float lower_right_x, float lower_right_y, ImU32 col, float rounding=0.0, ImDrawFlags flags=0)
     add_triangle(self, float point1_x, float point1_y, float point2_x, float point2_y, float point3_x, float point3_y, ImU32 col, float thickness=1.0)
     """
+
     def __init__(self):
         pass
 
@@ -263,12 +266,11 @@ class ImguiCircleWorldSpace(ImguiDrawListObject):
                                                       self.target_texture.width, self.target_texture.height)
 
         window_x, window_y = image_space_to_image_window_space(image_x, image_y)
-        window_x += g.LEFT_WINDOW_WIDTH
         self.target_draw_list.add_circle(window_x, window_y, self.screen_radius, imgui.get_color_u32_rgba(*self.color))
 
 
 class ImguiTextWorldSpace(ImguiDrawListObject):
-    def __init__(self, world_x , world_y, text, color,  target_draw_list, target_texture):
+    def __init__(self, world_x, world_y, text, color, target_draw_list, target_texture):
         """
 
         :param world_x:
@@ -291,12 +293,41 @@ class ImguiTextWorldSpace(ImguiDrawListObject):
                                                       self.target_texture.x_lim, self.target_texture.y_lim,
                                                       self.target_texture.width, self.target_texture.height)
         window_x, window_y = image_space_to_image_window_space(image_x, image_y)
-        window_x += g.LEFT_WINDOW_WIDTH
         self.target_draw_list.add_text(window_x, window_y, imgui.get_color_u32_rgba(*self.color), self.text)
+
+
+class ImguiMousePointerScreenSpace(ImguiDrawListObject):
+    """main texture 专用"""
+    def __init__(self, color=(0.6, 0.6, 0.6, 0.5)):
+        super().__init__()
+        self.color = color
+
+    def draw(self):
+        window_x, window_y = image_space_to_image_window_space(*g.mMousePosInImage)
+        g.mImageWindowDrawList.add_line(
+            0, window_y, g.mWindowSize[0], window_y, imgui.get_color_u32_rgba(*self.color), 1)
+        g.mImageWindowDrawList.add_line(
+            window_x, 0, window_x, g.mWindowSize[1], imgui.get_color_u32_rgba(*self.color), 1)
+
+
+class ImguiRectScreenSpace(ImguiDrawListObject):
+    """main texture 专用"""
+    def __init__(self, color=(0.8, 0.8, 0.8, 0.32)):
+        super().__init__()
+        self.color = color
+
+    def draw(self, image_space_start: tuple, image_space_end: tuple):
+        """start end 为图像空间坐标 """
+        win_s_x, win_s_y = image_space_to_image_window_space(*image_space_start)
+        win_e_x, win_e_y = image_space_to_image_window_space(*image_space_end)
+        color = imgui.get_color_u32_rgba(*self.color)
+        g.mImageWindowDrawList.add_rect_filled(win_s_x, win_s_y, win_e_x, win_e_y, color, 0.0)
+
+
 # endregion
 
 # region opengl
-class GeoGL:
+class RenderObject:
     def __init__(self, name, style_factory, vertices_data_get_func):
         self.name = name
         self.ctx = g.mCtx
@@ -354,32 +385,32 @@ class GeoGL:
         self.vao.render(self.prog, mode=moderngl.TRIANGLES)
 
 
-class RoadGL(GeoGL):
+class RoadRO(RenderObject):
     def __init__(self, name, style_factory):
         super().__init__(name, style_factory, Road.get_vertices_data)
 
 
-class BuildingGL(GeoGL):
+class BuildingRO(RenderObject):
     def __init__(self, name, style_factory):
         super().__init__(name, style_factory, Building.get_vertices_data)
 
 
-class RegionGL(GeoGL):
+class RegionRO(RenderObject):
     def __init__(self, name, style_factory):
         super().__init__(name, style_factory, Region.get_vertices_data)
 
 
-class NodeGL(GeoGL):
+class NodeRO(RenderObject):
     def __init__(self, name, style_factory):
         super().__init__(name, style_factory, Road.get_node_vertices_data)
 
 
-class PointerGL:
-    instance: 'PointerGL' = None
+class PointerRO():
+    instance: 'PointerRO' = None
 
     def __init__(self):
-        assert PointerGL.instance is None, 'only one PointerGL can be created'
-        PointerGL.instance = self
+        assert PointerRO.instance is None, 'only one PointerGL can be created'
+        PointerRO.instance = self
         self.ctx = g.mCtx
         self.vao = VAO('pointer')
 
@@ -422,7 +453,7 @@ class PointerGL:
         self.vao.render(self.prog, mode=moderngl.TRIANGLES)
 
 
-class RectGL:
+class RectRO:
     def __init__(self, name):
         self.ctx = g.mCtx
         self.vao = VAO(name)
@@ -452,4 +483,16 @@ class RectGL:
     def render(self):
         self.vao.render(self.prog, mode=moderngl.TRIANGLES)
 
+
+class FullScreenRO:
+    def __init__(self, program_path):
+        self.ctx = g.mCtx
+        self.vao = moderngl_window.geometry.quad_fs()
+        self.prog = g.mWindowEvent.load_program(program_path)
+
+    def update_prog(self, key, value):
+        self.prog[key] = value
+
+    def render(self):
+        self.vao.render(self.prog)
 # endregion

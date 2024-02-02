@@ -55,6 +55,7 @@ class RoadNet:
             selected_road_uids.add(random_road['uid'])  # 将随机到的路加入已被选择的路的set
             spawn_point = Road.interpolate_road_by_random_position(random_road)
             if spawn_point is None: continue  # 如果找不到符合路网间距规范的点，则重新选一条路
+            spawn_point = spawn_point.reshape(-1, 2)
             Road.split_road_by_coord(random_road, spawn_point)  # 在路上随机一个点并尝试分裂
             uid = Road.add_road_by_coords(spawn_point, RoadLevel.TERTIARY, RoadState.OPTIMIZING)  # 生成新路
             new_road = Road.get_road_by_uid(uid)
@@ -75,7 +76,7 @@ class RoadNet:
         return image_data.numpy()
 
     def render(self):
-        GraphicManager.instance.bilt_to('RoadNet Observation', self.get_image_observation())
+        GraphicManager.I.bilt_to('RoadNet Observation', self.get_image_observation())
 
     def step(self, action):
         """返回new_observation, rewards, done, all_done"""

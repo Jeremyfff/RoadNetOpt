@@ -1,4 +1,5 @@
 import imgui
+import numpy as np
 import pygame
 from PIL import Image
 from graphic_module import GraphicManager
@@ -7,7 +8,7 @@ from utils import io_utils
 from gui import global_var as g
 from gui import components as imgui_c
 from gui import common
-from gui import imgui_main_texture_toolbox_subwindow
+from gui import imgui_toolbox_subwindow
 
 mImageWindowSize = (0, 0)
 mImageWindowPos = (0, 0)
@@ -25,8 +26,9 @@ def show():
     flags = imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_COLLAPSE | imgui.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS | imgui.WINDOW_NO_SCROLL_WITH_MOUSE
     imgui.set_next_window_size(screen_width - g.LEFT_WINDOW_WIDTH, screen_height - g.BOTTOM_WINDOW_HEIGHT)
     imgui.set_next_window_position(g.LEFT_WINDOW_WIDTH, 0)
+    # 开启窗口
     imgui.begin("image window", False, flags=flags)
-
+    # 计算数值
     mImageWindowPos = (int(imgui.get_window_position()[0]), int(imgui.get_window_position()[1]))
     mImageWindowSize = imgui.get_window_size()
     g.mImageWindowInnerSize = (int(mImageWindowSize[0] - g.IMAGE_WINDOW_INDENT_LEFT - g.IMAGE_WINDOW_INDENT_RIGHT),
@@ -44,43 +46,41 @@ def show():
     g.mHoveringImageWindow = imgui_c.is_hovering_window()
     g.mFocusingOnImageWindow = imgui.is_window_focused()
     g.mImageWindowDrawList = imgui.get_window_draw_list()
-    textures_to_delete = set()
-    flags = imgui.TAB_BAR_AUTO_SELECT_NEW_TABS | imgui.TAB_BAR_TAB_LIST_POPUP_BUTTON
 
+    textures_to_delete = set()  # 新建一个set用以记录哪些textures需要被删除
+    flags = imgui.TAB_BAR_AUTO_SELECT_NEW_TABS | imgui.TAB_BAR_TAB_LIST_POPUP_BUTTON
     with imgui.begin_tab_bar('image_tab_bar', flags=flags):
-        for graphic_texture in GraphicManager.instance.textures.values():
-            if not graphic_texture.exposed:
-                continue
+        for graphic_texture in GraphicManager.I.textures.values():
+            if not graphic_texture.exposed: continue  # 如果texture被设置为不暴露，则略过
             selected, opened = imgui.begin_tab_item(graphic_texture.name, imgui.TAB_ITEM_TRAILING)
-            if selected:
-                if graphic_texture.name == 'main':
-                    imgui.image(graphic_texture.texture_id, graphic_texture.width * g.TEXTURE_SCALE,
-                                graphic_texture.height * g.TEXTURE_SCALE)
-                    g.mShowingMainTextureWindow = True
-                    GraphicManager.instance.main_texture.render_draw_list()
-                    imgui_main_texture_toolbox_subwindow.show()
-                else:
-                    imgui.image(graphic_texture.texture_id, graphic_texture.width * g.TEXTURE_SCALE,
-                                graphic_texture.height * g.TEXTURE_SCALE)
-                    g.mShowingMainTextureWindow = False
-                # mTextureInfo['last updated'] = str(graphic_texture.last_update_time)
-                mTextureInfo['texture size'] = f"{graphic_texture.width} , {graphic_texture.height}"
-                mTextureInfo['x_lim'] = str(graphic_texture.x_lim)
-                mTextureInfo['y_lim'] = str(graphic_texture.y_lim)
-                imgui_c.dict_viewer_component(mTextureInfo, 'texture info', 'key', 'value', None, 800)
-                # if graphic_texture.cached_data is not None:
-                #     if imgui.button('save'):
-                #         image = Image.fromarray(graphic_texture.cached_data.astype('uint8'))  # 将图像数据缩放到 0-255 范围并转换为 uint8 类型
-                #         try:
-                #             image.save(
-                #                 io_utils.save_file_window(defaultextension='.png', filetypes=[('Image File', '.png')]))
-                #         except:
-                #             pass
-                imgui.end_tab_item()
+            if not selected:
+                continue  # 仅渲染被选中的texture
             if not opened:
                 textures_to_delete.add(graphic_texture.name)
+                imgui.end_tab_item()
+                continue
+
+            if graphic_texture.name == 'main':
+                # 主视图
+                g.mShowingMainTextureWindow = True
+                texture_id = graphic_texture.get_final_texture_id()
+                # 显示image
+                imgui.image(texture_id, graphic_texture.width * g.TEXTURE_SCALE,
+                            graphic_texture.height * g.TEXTURE_SCALE)
+                GraphicManager.I.MainTexture.render_draw_list()
+
+            else:
+                # 其他视图
+                g.mShowingMainTextureWindow = False
+                imgui.image(graphic_texture.texture_id, graphic_texture.width * g.TEXTURE_SCALE,
+                            graphic_texture.height * g.TEXTURE_SCALE)
+            # 显示侧边工具栏
+            imgui_toolbox_subwindow.show(graphic_texture)
+
+            imgui.end_tab_item()
 
     imgui.end()
 
+    # 逻辑操作
     for name in textures_to_delete:
-        GraphicManager.instance.del_texture(name)
+        GraphicManager.I.unregister_texture(name)

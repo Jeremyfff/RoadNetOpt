@@ -9,8 +9,8 @@ def tooltip(content):
         imgui.set_tooltip(content)
 
 
-def dict_viewer_component(target_dict: dict, dict_name, key_name, value_name, value_op=None, width: float = 0):
-    if imgui.begin_table(dict_name, 2, outer_size_width=width):
+def dict_viewer_component(target_dict: dict, dict_name, key_name, value_name, value_op=None, width: float = 0, flags=0):
+    if imgui.begin_table(dict_name, 2, outer_size_width=width, flags=flags):
         imgui.table_setup_column(key_name)
         imgui.table_setup_column(value_name)
         imgui.table_headers_row()
@@ -69,3 +69,27 @@ def imgui_item_selector_component(label, _dict):
             any_clicked |= clicked
         imgui.end_popup()
     return any_clicked
+
+
+def auto_push_blur_window_bg():
+    # 如果开启了窗口模糊，则将原有的窗口不透明度设为1
+    if g.ENABLE_WINDOW_BLUR and g.mShowingMainTextureWindow:
+        org_bg_color = imgui.get_style().colors[imgui.COLOR_WINDOW_BACKGROUND]
+        new_bg_color = (org_bg_color[0], org_bg_color[1], org_bg_color[2], 1.0)
+        imgui.push_style_color(imgui.COLOR_WINDOW_BACKGROUND, *new_bg_color)
+
+
+def auto_pop_blur_window_bg():
+    if g.ENABLE_WINDOW_BLUR and g.mShowingMainTextureWindow:
+        imgui.pop_style_color()
+
+
+def auto_draw_blur_bg(texture_id):
+    # 填充底图
+    if g.ENABLE_WINDOW_BLUR and g.mShowingMainTextureWindow:
+        draw_list = imgui.get_window_draw_list()
+        draw_list.add_image(texture_id,
+                            g.mImageWindowInnerPos,
+                            (g.mImageWindowInnerSize[0] + g.mImageWindowInnerPos[0],
+                             g.mImageWindowInnerSize[1] + g.mImageWindowInnerPos[1])
+                            , col=imgui.get_color_u32_rgba(1, 1, 1, 0.15))

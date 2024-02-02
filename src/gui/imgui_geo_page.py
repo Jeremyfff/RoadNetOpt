@@ -1,18 +1,14 @@
 import os.path
-import traceback
 from typing import Optional
-
 import imgui
 import osmnx as ox
 from pympler.asizeof import asizeof
 from graphic_module import GraphicManager
 from geo import Road, Building, Region
-from utils import io_utils, RoadCluster, BuildingCluster, RegionCluster, graphic_uitls
-import geopandas as gpd
+from utils import io_utils, RoadCluster, BuildingCluster, RegionCluster
 from gui.icon_module import IconManager, Spinner
 from gui import components as imgui_c
 from gui import global_var as g
-from gui import common
 
 mRoadGDFCluster = RoadCluster()
 mBuildingGDFCluster = BuildingCluster()
@@ -45,7 +41,7 @@ def imgui_tree_node_load_data_content():
             imgui.end_tab_item()
 
 
-mDataPath = '../data/VirtualEnv/try2.bin'
+mDataPath = g.DEFAULT_DATA_PATH
 mCachedData: Optional[dict] = None
 mCachedDataSize: float = 0  # MiB
 EMPTY_DATA = {'version': 'N/A', 'roads': 'N/A', 'buildings': 'N/A', 'regions': 'N/A', 'height': 'N/A'}
@@ -70,6 +66,7 @@ def imgui_tab_item_data_to_gdfs_content():
     imgui.same_line()
     if imgui.button('...', width=45 * g.GLOBAL_SCALE):
         mDataPath = io_utils.open_file_window()
+        g.DEFAULT_DATA_PATH = mDataPath
     imgui_c.tooltip('打开文件浏览器')
     if imgui.button('LOAD DATA', width=300 * g.GLOBAL_SCALE + 16, height=32 * g.GLOBAL_SCALE):
         Spinner.start('load_data', target=_load_data, args=())
@@ -110,7 +107,7 @@ def imgui_tab_item_data_to_gdfs_content():
             Road.data_to_roads(mCachedData),
             Building.data_to_buildings(mCachedData),
             Region.data_to_regions(mCachedData),
-            GraphicManager.instance.main_texture.clear_cache()
+            GraphicManager.I.MainTexture.clear_cache()
         ), args=(0,))
     Spinner.spinner('data_to_all')
 
@@ -135,10 +132,9 @@ def imgui_tab_item_osm_to_gdfs_content():
     if imgui.button('Download', 260 * g.GLOBAL_SCALE, 32 * g.GLOBAL_SCALE):
         Spinner.start('download_osm', target=
         lambda _: (
-            print('aaa'),
             Road.from_graph(ox.graph_from_bbox(mOSMNorth, mOSMSouth, mOSMEast, mOSMWest,
                                                network_type=mOSMNetworkTypes[mOSMCurrentNetworkTypeIdx])),
-            GraphicManager.instance.main_texture.clear_x_y_lim()
+            GraphicManager.I.MainTexture.clear_x_y_lim()
         ), args=(0,))
     Spinner.spinner('download_osm')
 
@@ -180,21 +176,21 @@ def imgui_tab_item_road_ops_content():
     clicked, mShowingCloseNodes = imgui.checkbox('显示相近节点', mShowingCloseNodes)
     clicked |= mAnyChangeOnRoad
     if clicked and mShowingCloseNodes:
-        GraphicManager.instance.main_texture.clear_close_node_debug_circles()
+        GraphicManager.I.MainTexture.clear_close_node_debug_circles()
         groups = Road.get_close_nodes()
         for _, nodes in groups.items():
-            GraphicManager.instance.main_texture.add_close_node_debug_circle(
-                *Road.get_nodes_avg_coord(nodes), screen_radius=25, tuple_color=(1, 1, 0, 1),
+            GraphicManager.I.MainTexture.add_close_node_debug_circle(
+                *Road.get_nodes_avg_coord(nodes), screen_radius=25, color=(1, 1, 0, 1),
                 content='\n'.join([f"coord: {node['coord']}" for _, node in nodes.iterrows()])
             )
     elif clicked and not mShowingCloseNodes:
-        GraphicManager.instance.main_texture.clear_close_node_debug_circles()
+        GraphicManager.I.MainTexture.clear_close_node_debug_circles()
     # 相交路网的显示
     _idx_changed = False
     clicked, mShowingIntersectionRoads = imgui.checkbox('显示相交路网', mShowingIntersectionRoads)
     clicked |= mAnyChangeOnRoad
     if clicked and mShowingIntersectionRoads:
-        GraphicManager.instance.main_texture.clear_intersection_debug_circles()
+        GraphicManager.I.MainTexture.clear_intersection_debug_circles()
         mCachedIntersectionData_uid, mCachedIntersectionData_point = \
             Road.detect_intersection(Road.get_all_roads(), Road.get_all_roads())
         _idx_changed = True
@@ -203,8 +199,8 @@ def imgui_tab_item_road_ops_content():
         mCachedIntersectionData_point = None
         mCurrentViewingIntersectionData = 0
         g.mSelectedRoads = {}
-        GraphicManager.instance.main_texture.clear_intersection_debug_circles()
-        GraphicManager.instance.main_texture.clear_highlight_data()
+        GraphicManager.I.MainTexture.clear_intersection_debug_circles()
+        GraphicManager.I.MainTexture.clear_highlight_data()
     if mShowingIntersectionRoads and mCachedIntersectionData_uid and mCachedIntersectionData_point:
         imgui.same_line()
         imgui.text(f'{mCurrentViewingIntersectionData}/{len(mCachedIntersectionData_uid)}')
@@ -219,15 +215,15 @@ def imgui_tab_item_road_ops_content():
             _idx_changed = True
 
         if _idx_changed:
-            GraphicManager.instance.main_texture.clear_intersection_debug_circles()
+            GraphicManager.I.MainTexture.clear_intersection_debug_circles()
             point = mCachedIntersectionData_point[mCurrentViewingIntersectionData]
             uid1 = mCachedIntersectionData_uid[mCurrentViewingIntersectionData][0]
             uid2 = mCachedIntersectionData_uid[mCurrentViewingIntersectionData][1]
             road1 = Road.get_road_by_uid(uid1)
             road2 = Road.get_road_by_uid(uid2)
             g.mSelectedRoads = {road1['uid']: road1, road2['uid']: road2}
-            GraphicManager.instance.main_texture.clear_highlight_data()
-            GraphicManager.instance.main_texture.add_intersection_debug_circle(
+            GraphicManager.I.MainTexture.clear_highlight_data()
+            GraphicManager.I.MainTexture.add_intersection_debug_circle(
                 mCachedIntersectionData_point[mCurrentViewingIntersectionData][0],
                 mCachedIntersectionData_point[mCurrentViewingIntersectionData][1],
                 8, (1, 1, 1, 1),
@@ -239,13 +235,13 @@ def imgui_tab_item_road_ops_content():
     if clicked and mShowingInvalidRoads:
         invalid_road_uids = Road.examine_invalid_roads()
         g.mSelectedRoads = {uid: Road.get_road_by_uid(uid) for uid in invalid_road_uids}
-        GraphicManager.instance.main_texture.clear_highlight_data()
+        GraphicManager.I.MainTexture.clear_highlight_data()
         mCachedInvalidRoadUids = invalid_road_uids
     if clicked and not mShowingInvalidRoads:
         mShowingInvalidRoads = False
         mCachedInvalidRoadUids = []
         g.mSelectedRoads = {}
-        GraphicManager.instance.main_texture.clear_highlight_data()
+        GraphicManager.I.MainTexture.clear_highlight_data()
 
     mAnyChangeOnRoad = False  # set back to false
     # 各类工具按钮

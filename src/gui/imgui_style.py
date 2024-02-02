@@ -8,15 +8,15 @@ from gui import global_var as g
 from gui.icon_module import Spinner, IconManager
 
 
-def init_font(impl):
+def init_font():
     io = imgui.get_io()
-    g.mChineseFont = io.fonts.add_font_from_file_ttf(os.path.join(g.RESOURCE_DIR, 'fonts/Deng.ttf'),
-                                                     g.FONT_SIZE * g.FONT_SCALING_FACTOR,
+    g.mChineseFont = io.fonts.add_font_from_file_ttf(
+        os.path.join(g.RESOURCE_DIR, 'fonts/Deng.ttf'),
+        g.FONT_SIZE * g.FONT_SCALING_FACTOR,
         glyph_ranges=io.fonts.get_glyph_ranges_chinese_full()
     )
     io.font_global_scale /= g.FONT_SCALING_FACTOR
-
-    impl.refresh_font_texture()
+    g.mModernglWindowRenderer.refresh_font_texture()  # impl = g.mModernglWindowRenderer
 
 
 def init_style_var():

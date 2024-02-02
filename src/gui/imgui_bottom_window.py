@@ -1,6 +1,7 @@
 import imgui
 import pygame
 from gui import global_var as g
+from gui import global_info as gi
 from gui import components as imgui_c
 
 
@@ -12,7 +13,7 @@ def show():
     imgui.set_next_window_position(0, screen_height - g.BOTTOM_WINDOW_HEIGHT)
 
     imgui.begin("bottom window", False, flags=flags)
-    imgui.text('some information')
+    imgui.text(f'{gi.LAST_MODIFIED} V{gi.RELEASE_VERSION}')
     imgui.same_line()
     if imgui.button('信息窗口'):
         g.mInfoWindowOpened = True
