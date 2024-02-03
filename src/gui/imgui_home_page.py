@@ -12,7 +12,6 @@ def show():
     imgui.text('')
     imgui.text_wrapped(gi.PRODUCT_NAME)
     imgui.text(f'Version:{gi.RELEASE_VERSION} {gi.LAST_MODIFIED}')
-    imgui.text(f'工具作者：{", ".join(gi.AUTHOR)}')
     imgui.text('项目地址: ')
     imgui.text_colored('https://github.com/Jeremyfff/RoadNetOpt', 0.19, 0.53, 0.92, 1.0)
     imgui.text('')
