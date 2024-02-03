@@ -20,3 +20,9 @@ pympler
 opencv-python
 pyautogui
 moderngl
+PyQt5
+moderngl_window
+swifter
+geovoronoi
+pythonnet
+PyOpenGL
