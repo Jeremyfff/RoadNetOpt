@@ -10,7 +10,7 @@ from style_module import StyleManager as sm
 from utils import RoadCluster, BuildingCluster, RegionCluster
 from utils import graphic_uitls
 from gui.icon_module import IconManager
-
+from abc import ABC, abstractmethod
 
 class SimpleTexture:
     def __init__(self, name, width, height, channel=4):
@@ -78,6 +78,7 @@ class FrameBufferTexture:
         g.mModernglWindowRenderer.register_texture(self.fbo.color_attachments[0])
         logging.debug(f'texture size updated to {self.width, self.height}, id = {self.fbo.color_attachments[0].glo}')
 
+    @abstractmethod
     def render(self, **kwargs):
         pass
 
